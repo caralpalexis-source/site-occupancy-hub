@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
 import { Zone, ZoneType } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -37,13 +37,25 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, Building2, Users, Maximize } from "lucide-react";
+import { Plus, Pencil, Trash2, Building2, Users, Maximize, ArrowUpDown } from "lucide-react";
 import { OccupationBadge } from "@/components/OccupationBadge";
+import { ZoneTypeFilter, ZoneFilterType } from "@/components/ZoneTypeFilter";
+import { SortSelect, SortOption } from "@/components/SortSelect";
+
+type SortType = "alphabetic" | "taux_asc" | "taux_desc";
+
+const sortOptions: SortOption[] = [
+  { value: "alphabetic", label: "Alphabétique" },
+  { value: "taux_asc", label: "Taux ↑ (croissant)" },
+  { value: "taux_desc", label: "Taux ↓ (décroissant)" },
+];
 
 const Zones: React.FC = () => {
   const { zones, addZone, updateZone, deleteZone, getOccupationForZone, dateEtat } = useApp();
   const [isOpen, setIsOpen] = useState(false);
   const [editingZone, setEditingZone] = useState<Zone | null>(null);
+  const [filter, setFilter] = useState<ZoneFilterType>("all");
+  const [sortBy, setSortBy] = useState<SortType>("alphabetic");
   const [formData, setFormData] = useState({
     type: "tertiaire" as ZoneType,
     batiment: "",
@@ -51,6 +63,32 @@ const Zones: React.FC = () => {
     capacite_max: "",
     image_plan: "",
   });
+
+  // Filtrage et tri des zones
+  const filteredAndSortedZones = useMemo(() => {
+    let result = filter === "all" 
+      ? [...zones] 
+      : zones.filter((z) => z.type === filter);
+
+    // Tri
+    result.sort((a, b) => {
+      if (sortBy === "alphabetic") {
+        const batimentCompare = a.batiment.localeCompare(b.batiment, "fr");
+        if (batimentCompare !== 0) return batimentCompare;
+        return a.nom_zone.localeCompare(b.nom_zone, "fr");
+      } else {
+        const statsA = getOccupationForZone(a.id, dateEtat);
+        const statsB = getOccupationForZone(b.id, dateEtat);
+        if (sortBy === "taux_asc") {
+          return statsA.taux - statsB.taux;
+        } else {
+          return statsB.taux - statsA.taux;
+        }
+      }
+    });
+
+    return result;
+  }, [zones, filter, sortBy, getOccupationForZone, dateEtat]);
 
   const resetForm = () => {
     setFormData({
@@ -238,19 +276,37 @@ const Zones: React.FC = () => {
         </Dialog>
       </div>
 
-      {zones.length === 0 ? (
+      {/* Filtres et tri */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
+        <ZoneTypeFilter value={filter} onChange={setFilter} />
+        <div className="sm:ml-auto">
+          <SortSelect
+            options={sortOptions}
+            value={sortBy}
+            onChange={(v) => setSortBy(v as SortType)}
+          />
+        </div>
+      </div>
+
+      {filteredAndSortedZones.length === 0 ? (
         <div className="text-center py-16 bg-card rounded-xl border border-border">
           <Building2 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-foreground mb-2">
-            Aucune zone configurée
+            {zones.length === 0 
+              ? "Aucune zone configurée" 
+              : `Aucune zone ${filter === "tertiaire" ? "tertiaire" : "opérationnelle"}`}
           </h3>
           <p className="text-muted-foreground mb-4">
-            Créez votre première zone pour commencer
+            {zones.length === 0 
+              ? "Créez votre première zone pour commencer"
+              : "Aucune zone ne correspond à ce filtre"}
           </p>
-          <Button onClick={() => setIsOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Créer une zone
-          </Button>
+          {zones.length === 0 && (
+            <Button onClick={() => setIsOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Créer une zone
+            </Button>
+          )}
         </div>
       ) : (
         <div className="bg-card rounded-xl border border-border overflow-hidden">
@@ -267,7 +323,7 @@ const Zones: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {zones.map((zone) => {
+              {filteredAndSortedZones.map((zone) => {
                 const stats = getOccupationForZone(zone.id, dateEtat);
                 return (
                   <TableRow key={zone.id}>
