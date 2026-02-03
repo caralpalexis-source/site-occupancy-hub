@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
 import { AffectationTertiaire, AffectationOperationnelle } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,27 @@ import {
 import { Plus, Pencil, Trash2, Users, Maximize, Calendar } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import { SortSelect, SortOption } from "@/components/SortSelect";
+
+type SortTertiaire = "personne" | "service" | "zone" | "periode_asc" | "periode_desc";
+type SortOperationnelle = "projet" | "surface_asc" | "surface_desc" | "zone" | "periode_asc" | "periode_desc";
+
+const sortOptionsTertiaire: SortOption[] = [
+  { value: "personne", label: "Personne (A-Z)" },
+  { value: "service", label: "Service (A-Z)" },
+  { value: "zone", label: "Zone (A-Z)" },
+  { value: "periode_desc", label: "Période (récent → ancien)" },
+  { value: "periode_asc", label: "Période (ancien → récent)" },
+];
+
+const sortOptionsOperationnelle: SortOption[] = [
+  { value: "projet", label: "Projet (A-Z)" },
+  { value: "surface_desc", label: "Surface ↓ (décroissant)" },
+  { value: "surface_asc", label: "Surface ↑ (croissant)" },
+  { value: "zone", label: "Zone (A-Z)" },
+  { value: "periode_desc", label: "Période (récent → ancien)" },
+  { value: "periode_asc", label: "Période (ancien → récent)" },
+];
 
 const Affectations: React.FC = () => {
   const {
@@ -57,6 +78,10 @@ const Affectations: React.FC = () => {
 
   const zonesTertiaires = zones.filter((z) => z.type === "tertiaire");
   const zonesOperationnelles = zones.filter((z) => z.type === "operationnelle");
+
+  // Sort state
+  const [sortTertiaire, setSortTertiaire] = useState<SortTertiaire>("personne");
+  const [sortOperationnelle, setSortOperationnelle] = useState<SortOperationnelle>("projet");
 
   // Tertiaire form state
   const [isTertiaireOpen, setIsTertiaireOpen] = useState(false);
@@ -85,6 +110,58 @@ const Affectations: React.FC = () => {
     const zone = zones.find((z) => z.id === zoneId);
     return zone ? `${zone.batiment} - ${zone.nom_zone}` : "Zone inconnue";
   };
+
+  // Sorted affectations tertiaires
+  const sortedAffectationsTertiaires = useMemo(() => {
+    const sorted = [...affectationsTertiaires];
+    
+    sorted.sort((a, b) => {
+      switch (sortTertiaire) {
+        case "personne":
+          const nameA = `${a.nom} ${a.prenom}`.toLowerCase();
+          const nameB = `${b.nom} ${b.prenom}`.toLowerCase();
+          return nameA.localeCompare(nameB, "fr");
+        case "service":
+          return a.service.localeCompare(b.service, "fr");
+        case "zone":
+          return getZoneName(a.zone_id).localeCompare(getZoneName(b.zone_id), "fr");
+        case "periode_asc":
+          return new Date(a.date_debut).getTime() - new Date(b.date_debut).getTime();
+        case "periode_desc":
+          return new Date(b.date_debut).getTime() - new Date(a.date_debut).getTime();
+        default:
+          return 0;
+      }
+    });
+    
+    return sorted;
+  }, [affectationsTertiaires, sortTertiaire, zones]);
+
+  // Sorted affectations operationnelles
+  const sortedAffectationsOperationnelles = useMemo(() => {
+    const sorted = [...affectationsOperationnelles];
+    
+    sorted.sort((a, b) => {
+      switch (sortOperationnelle) {
+        case "projet":
+          return a.nom_projet.localeCompare(b.nom_projet, "fr");
+        case "surface_asc":
+          return a.surface_necessaire - b.surface_necessaire;
+        case "surface_desc":
+          return b.surface_necessaire - a.surface_necessaire;
+        case "zone":
+          return getZoneName(a.zone_id).localeCompare(getZoneName(b.zone_id), "fr");
+        case "periode_asc":
+          return new Date(a.date_debut).getTime() - new Date(b.date_debut).getTime();
+        case "periode_desc":
+          return new Date(b.date_debut).getTime() - new Date(a.date_debut).getTime();
+        default:
+          return 0;
+      }
+    });
+    
+    return sorted;
+  }, [affectationsOperationnelles, sortOperationnelle, zones]);
 
   // Tertiaire handlers
   const resetTertiaireForm = () => {
@@ -210,101 +287,108 @@ const Affectations: React.FC = () => {
 
         {/* Tertiaire Tab */}
         <TabsContent value="tertiaire" className="space-y-4">
-          <div className="flex justify-end">
-            <Dialog open={isTertiaireOpen} onOpenChange={handleTertiaireOpenChange}>
-              <DialogTrigger asChild>
-                <Button disabled={zonesTertiaires.length === 0}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Nouvelle affectation
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[500px]">
-                <DialogHeader>
-                  <DialogTitle>
-                    {editingTertiaire ? "Modifier l'affectation" : "Nouvelle affectation tertiaire"}
-                  </DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleTertiaireSubmit} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <SortSelect
+              options={sortOptionsTertiaire}
+              value={sortTertiaire}
+              onChange={(v) => setSortTertiaire(v as SortTertiaire)}
+            />
+            <div className="sm:ml-auto">
+              <Dialog open={isTertiaireOpen} onOpenChange={handleTertiaireOpenChange}>
+                <DialogTrigger asChild>
+                  <Button disabled={zonesTertiaires.length === 0}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Nouvelle affectation
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <DialogTitle>
+                      {editingTertiaire ? "Modifier l'affectation" : "Nouvelle affectation tertiaire"}
+                    </DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleTertiaireSubmit} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="nom">Nom</Label>
+                        <Input
+                          id="nom"
+                          value={tertiaireForm.nom}
+                          onChange={(e) => setTertiaireForm({ ...tertiaireForm, nom: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="prenom">Prénom</Label>
+                        <Input
+                          id="prenom"
+                          value={tertiaireForm.prenom}
+                          onChange={(e) => setTertiaireForm({ ...tertiaireForm, prenom: e.target.value })}
+                          required
+                        />
+                      </div>
+                    </div>
                     <div className="space-y-2">
-                      <Label htmlFor="nom">Nom</Label>
+                      <Label htmlFor="service">Service</Label>
                       <Input
-                        id="nom"
-                        value={tertiaireForm.nom}
-                        onChange={(e) => setTertiaireForm({ ...tertiaireForm, nom: e.target.value })}
+                        id="service"
+                        value={tertiaireForm.service}
+                        onChange={(e) => setTertiaireForm({ ...tertiaireForm, service: e.target.value })}
+                        placeholder="Direction, RH, IT..."
                         required
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="prenom">Prénom</Label>
-                      <Input
-                        id="prenom"
-                        value={tertiaireForm.prenom}
-                        onChange={(e) => setTertiaireForm({ ...tertiaireForm, prenom: e.target.value })}
-                        required
-                      />
+                      <Label htmlFor="zone">Zone</Label>
+                      <Select
+                        value={tertiaireForm.zone_id}
+                        onValueChange={(v) => setTertiaireForm({ ...tertiaireForm, zone_id: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionner une zone" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {zonesTertiaires.map((zone) => (
+                            <SelectItem key={zone.id} value={zone.id}>
+                              {zone.batiment} - {zone.nom_zone}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="service">Service</Label>
-                    <Input
-                      id="service"
-                      value={tertiaireForm.service}
-                      onChange={(e) => setTertiaireForm({ ...tertiaireForm, service: e.target.value })}
-                      placeholder="Direction, RH, IT..."
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="zone">Zone</Label>
-                    <Select
-                      value={tertiaireForm.zone_id}
-                      onValueChange={(v) => setTertiaireForm({ ...tertiaireForm, zone_id: v })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner une zone" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {zonesTertiaires.map((zone) => (
-                          <SelectItem key={zone.id} value={zone.id}>
-                            {zone.batiment} - {zone.nom_zone}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="date_debut">Date de début</Label>
-                      <Input
-                        id="date_debut"
-                        type="date"
-                        value={tertiaireForm.date_debut}
-                        onChange={(e) => setTertiaireForm({ ...tertiaireForm, date_debut: e.target.value })}
-                        required
-                      />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="date_debut">Date de début</Label>
+                        <Input
+                          id="date_debut"
+                          type="date"
+                          value={tertiaireForm.date_debut}
+                          onChange={(e) => setTertiaireForm({ ...tertiaireForm, date_debut: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="date_fin">Date de fin (optionnel)</Label>
+                        <Input
+                          id="date_fin"
+                          type="date"
+                          value={tertiaireForm.date_fin}
+                          onChange={(e) => setTertiaireForm({ ...tertiaireForm, date_fin: e.target.value })}
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="date_fin">Date de fin (optionnel)</Label>
-                      <Input
-                        id="date_fin"
-                        type="date"
-                        value={tertiaireForm.date_fin}
-                        onChange={(e) => setTertiaireForm({ ...tertiaireForm, date_fin: e.target.value })}
-                      />
+                    <div className="flex justify-end gap-2 pt-4">
+                      <Button type="button" variant="outline" onClick={() => handleTertiaireOpenChange(false)}>
+                        Annuler
+                      </Button>
+                      <Button type="submit">
+                        {editingTertiaire ? "Mettre à jour" : "Créer"}
+                      </Button>
                     </div>
-                  </div>
-                  <div className="flex justify-end gap-2 pt-4">
-                    <Button type="button" variant="outline" onClick={() => handleTertiaireOpenChange(false)}>
-                      Annuler
-                    </Button>
-                    <Button type="submit">
-                      {editingTertiaire ? "Mettre à jour" : "Créer"}
-                    </Button>
-                  </div>
-                </form>
-              </DialogContent>
-            </Dialog>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
 
           {zonesTertiaires.length === 0 ? (
@@ -340,7 +424,7 @@ const Affectations: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {affectationsTertiaires.map((aff) => (
+                  {sortedAffectationsTertiaires.map((aff) => (
                     <TableRow key={aff.id}>
                       <TableCell className="font-medium">
                         {aff.prenom} {aff.nom}
@@ -395,93 +479,100 @@ const Affectations: React.FC = () => {
 
         {/* Operationnelle Tab */}
         <TabsContent value="operationnelle" className="space-y-4">
-          <div className="flex justify-end">
-            <Dialog open={isOperationnelleOpen} onOpenChange={handleOperationnelleOpenChange}>
-              <DialogTrigger asChild>
-                <Button disabled={zonesOperationnelles.length === 0}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Nouvelle affectation
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[500px]">
-                <DialogHeader>
-                  <DialogTitle>
-                    {editingOperationnelle ? "Modifier l'affectation" : "Nouvelle affectation opérationnelle"}
-                  </DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleOperationnelleSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="nom_projet">Nom du projet</Label>
-                    <Input
-                      id="nom_projet"
-                      value={operationnelleForm.nom_projet}
-                      onChange={(e) => setOperationnelleForm({ ...operationnelleForm, nom_projet: e.target.value })}
-                      placeholder="Projet XYZ"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="surface">Surface nécessaire (m²)</Label>
-                    <Input
-                      id="surface"
-                      type="number"
-                      min="0"
-                      step="0.1"
-                      value={operationnelleForm.surface_necessaire}
-                      onChange={(e) => setOperationnelleForm({ ...operationnelleForm, surface_necessaire: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="zone_op">Zone</Label>
-                    <Select
-                      value={operationnelleForm.zone_id}
-                      onValueChange={(v) => setOperationnelleForm({ ...operationnelleForm, zone_id: v })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner une zone" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {zonesOperationnelles.map((zone) => (
-                          <SelectItem key={zone.id} value={zone.id}>
-                            {zone.batiment} - {zone.nom_zone} ({zone.capacite_max} m²)
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <SortSelect
+              options={sortOptionsOperationnelle}
+              value={sortOperationnelle}
+              onChange={(v) => setSortOperationnelle(v as SortOperationnelle)}
+            />
+            <div className="sm:ml-auto">
+              <Dialog open={isOperationnelleOpen} onOpenChange={handleOperationnelleOpenChange}>
+                <DialogTrigger asChild>
+                  <Button disabled={zonesOperationnelles.length === 0}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Nouvelle affectation
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <DialogTitle>
+                      {editingOperationnelle ? "Modifier l'affectation" : "Nouvelle affectation opérationnelle"}
+                    </DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleOperationnelleSubmit} className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="date_debut_op">Date de début</Label>
+                      <Label htmlFor="nom_projet">Nom du projet</Label>
                       <Input
-                        id="date_debut_op"
-                        type="date"
-                        value={operationnelleForm.date_debut}
-                        onChange={(e) => setOperationnelleForm({ ...operationnelleForm, date_debut: e.target.value })}
+                        id="nom_projet"
+                        value={operationnelleForm.nom_projet}
+                        onChange={(e) => setOperationnelleForm({ ...operationnelleForm, nom_projet: e.target.value })}
+                        placeholder="Projet XYZ"
                         required
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="date_fin_op">Date de fin (optionnel)</Label>
+                      <Label htmlFor="surface">Surface nécessaire (m²)</Label>
                       <Input
-                        id="date_fin_op"
-                        type="date"
-                        value={operationnelleForm.date_fin}
-                        onChange={(e) => setOperationnelleForm({ ...operationnelleForm, date_fin: e.target.value })}
+                        id="surface"
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={operationnelleForm.surface_necessaire}
+                        onChange={(e) => setOperationnelleForm({ ...operationnelleForm, surface_necessaire: e.target.value })}
+                        required
                       />
                     </div>
-                  </div>
-                  <div className="flex justify-end gap-2 pt-4">
-                    <Button type="button" variant="outline" onClick={() => handleOperationnelleOpenChange(false)}>
-                      Annuler
-                    </Button>
-                    <Button type="submit">
-                      {editingOperationnelle ? "Mettre à jour" : "Créer"}
-                    </Button>
-                  </div>
-                </form>
-              </DialogContent>
-            </Dialog>
+                    <div className="space-y-2">
+                      <Label htmlFor="zone_op">Zone</Label>
+                      <Select
+                        value={operationnelleForm.zone_id}
+                        onValueChange={(v) => setOperationnelleForm({ ...operationnelleForm, zone_id: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionner une zone" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {zonesOperationnelles.map((zone) => (
+                            <SelectItem key={zone.id} value={zone.id}>
+                              {zone.batiment} - {zone.nom_zone} ({zone.capacite_max} m²)
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="date_debut_op">Date de début</Label>
+                        <Input
+                          id="date_debut_op"
+                          type="date"
+                          value={operationnelleForm.date_debut}
+                          onChange={(e) => setOperationnelleForm({ ...operationnelleForm, date_debut: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="date_fin_op">Date de fin (optionnel)</Label>
+                        <Input
+                          id="date_fin_op"
+                          type="date"
+                          value={operationnelleForm.date_fin}
+                          onChange={(e) => setOperationnelleForm({ ...operationnelleForm, date_fin: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-4">
+                      <Button type="button" variant="outline" onClick={() => handleOperationnelleOpenChange(false)}>
+                        Annuler
+                      </Button>
+                      <Button type="submit">
+                        {editingOperationnelle ? "Mettre à jour" : "Créer"}
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
 
           {zonesOperationnelles.length === 0 ? (
@@ -517,7 +608,7 @@ const Affectations: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {affectationsOperationnelles.map((aff) => (
+                  {sortedAffectationsOperationnelles.map((aff) => (
                     <TableRow key={aff.id}>
                       <TableCell className="font-medium">{aff.nom_projet}</TableCell>
                       <TableCell>{aff.surface_necessaire} m²</TableCell>
