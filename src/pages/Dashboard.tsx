@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { DatePicker } from "@/components/DatePicker";
 import { StatCard } from "@/components/StatCard";
-import { ZoneCard } from "@/components/ZoneCard";
+import { ZoneCardExpandable } from "@/components/ZoneCardExpandable";
 import { ZoneTypeFilter, ZoneFilterType } from "@/components/ZoneTypeFilter";
 import { BuildingSummary } from "@/components/BuildingSummary";
 import { Building2, Users, Maximize, TrendingUp, ChevronDown } from "lucide-react";
@@ -18,6 +18,8 @@ import { cn } from "@/lib/utils";
 const Dashboard: React.FC = () => {
   const {
     zones,
+    affectationsTertiaires,
+    affectationsOperationnelles,
     dateEtat,
     setDateEtat,
     getOccupationForZone,
@@ -158,6 +160,34 @@ const Dashboard: React.FC = () => {
     return { tertiaires, operationnelles };
   };
 
+  // Helper: check if affectation is active at a given date
+  const isActiveAtDate = (dateDebut: string, dateFin: string | undefined, date: Date): boolean => {
+    const debut = new Date(dateDebut);
+    debut.setHours(0, 0, 0, 0);
+    const checkDate = new Date(date);
+    checkDate.setHours(0, 0, 0, 0);
+    
+    if (debut > checkDate) return false;
+    if (!dateFin) return true;
+    
+    const fin = new Date(dateFin);
+    fin.setHours(23, 59, 59, 999);
+    return fin >= checkDate;
+  };
+
+  // Get active affectations for a zone at date d'état
+  const getActiveAffectationsTertiaires = (zoneId: string) => {
+    return affectationsTertiaires.filter(
+      (a) => a.zone_id === zoneId && isActiveAtDate(a.date_debut, a.date_fin, dateEtat)
+    );
+  };
+
+  const getActiveAffectationsOperationnelles = (zoneId: string) => {
+    return affectationsOperationnelles.filter(
+      (a) => a.zone_id === zoneId && isActiveAtDate(a.date_debut, a.date_fin, dateEtat)
+    );
+  };
+
   return (
     <div className="p-8">
       {/* Header */}
@@ -268,10 +298,12 @@ const Dashboard: React.FC = () => {
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                           {tertiaires.map((zone) => (
-                            <ZoneCard
+                            <ZoneCardExpandable
                               key={zone.id}
                               zone={zone}
                               stats={getOccupationForZone(zone.id, dateEtat)}
+                              affectationsTertiaires={getActiveAffectationsTertiaires(zone.id)}
+                              affectationsOperationnelles={[]}
                             />
                           ))}
                         </div>
@@ -287,10 +319,12 @@ const Dashboard: React.FC = () => {
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                           {operationnelles.map((zone) => (
-                            <ZoneCard
+                            <ZoneCardExpandable
                               key={zone.id}
                               zone={zone}
                               stats={getOccupationForZone(zone.id, dateEtat)}
+                              affectationsTertiaires={[]}
+                              affectationsOperationnelles={getActiveAffectationsOperationnelles(zone.id)}
                             />
                           ))}
                         </div>
