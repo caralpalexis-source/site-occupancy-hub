@@ -1,6 +1,6 @@
 import React from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { Building2, Map, Users, Database, LayoutDashboard } from "lucide-react";
+import { Building2, Map, Users, Database, LayoutDashboard, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface LayoutProps {
@@ -11,6 +11,7 @@ const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Tableau de bord" },
   { to: "/zones", icon: Map, label: "Zones" },
   { to: "/affectations", icon: Users, label: "Affectations" },
+  { to: "/analysis", icon: BarChart3, label: "Analyse" },
   { to: "/data", icon: Database, label: "Data Management" },
 ];
 

@@ -8,6 +8,7 @@ import { Layout } from "@/components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Zones from "./pages/Zones";
 import Affectations from "./pages/Affectations";
+import Analysis from "./pages/Analysis";
 import DataManagement from "./pages/DataManagement";
 import NotFound from "./pages/NotFound";
 
@@ -25,6 +26,7 @@ const App = () => (
               <Route path="/" element={<Dashboard />} />
               <Route path="/zones" element={<Zones />} />
               <Route path="/affectations" element={<Affectations />} />
+              <Route path="/analysis" element={<Analysis />} />
               <Route path="/data" element={<DataManagement />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
