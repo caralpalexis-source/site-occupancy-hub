@@ -257,6 +257,34 @@ const Analysis: React.FC = () => {
     setAvailResults(compatible);
   };
 
+  // Helper: check if affectation overlaps with a closure period (independent from global analysis period)
+  const overlapsWithClosure = (
+    affDateDebut: string,
+    affDateFin: string | undefined,
+    closureStart: Date,
+    closureEnd: Date
+  ): boolean => {
+    const affStart = new Date(affDateDebut);
+    affStart.setHours(0, 0, 0, 0);
+    
+    const closureStartNorm = new Date(closureStart);
+    closureStartNorm.setHours(0, 0, 0, 0);
+    
+    const closureEndNorm = new Date(closureEnd);
+    closureEndNorm.setHours(23, 59, 59, 999);
+    
+    // affectation.date_debut <= fermeture.date_fin
+    if (affStart > closureEndNorm) return false;
+    
+    // AND (affectation.date_fin is empty OR affectation.date_fin >= fermeture.date_debut)
+    if (!affDateFin) return true;
+    
+    const affEnd = new Date(affDateFin);
+    affEnd.setHours(23, 59, 59, 999);
+    
+    return affEnd >= closureStartNorm;
+  };
+
   // Scenario analysis
   const runScenarioAnalysis = () => {
     if (!scenarioBatiment) return;
@@ -269,11 +297,11 @@ const Analysis: React.FC = () => {
     let personnesSansZone = 0;
     let projetsNonReplacables = 0;
 
-    // Find affected tertiary assignments
+    // Find affected tertiary assignments - using overlap with closure period (NOT global analysis period)
     const affectedTertiaire = affectationsTertiaires.filter(
       (a) =>
         unavailableZoneIds.includes(a.zone_id) &&
-        isActiveAtDate(a.date_debut, a.date_fin, scenarioDateDebut)
+        overlapsWithClosure(a.date_debut, a.date_fin, scenarioDateDebut, scenarioDateFin)
     );
 
     // Check if they can be relocated
@@ -303,11 +331,11 @@ const Analysis: React.FC = () => {
       if (!canRelocate) personnesSansZone++;
     });
 
-    // Find affected operational assignments
+    // Find affected operational assignments - using overlap with closure period (NOT global analysis period)
     const affectedOperationnelle = affectationsOperationnelles.filter(
       (a) =>
         unavailableZoneIds.includes(a.zone_id) &&
-        isActiveAtDate(a.date_debut, a.date_fin, scenarioDateDebut)
+        overlapsWithClosure(a.date_debut, a.date_fin, scenarioDateDebut, scenarioDateFin)
     );
 
     affectedOperationnelle.forEach((aff) => {
