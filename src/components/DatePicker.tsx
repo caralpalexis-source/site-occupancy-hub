@@ -15,12 +15,16 @@ interface DatePickerProps {
   date: Date;
   onDateChange: (date: Date) => void;
   label?: string;
+  fromYear?: number;
+  toYear?: number;
 }
 
 export const DatePicker: React.FC<DatePickerProps> = ({
   date,
   onDateChange,
   label,
+  fromYear = 2000,
+  toYear = 2100,
 }) => {
   return (
     <div className="flex items-center gap-2">
@@ -45,6 +49,9 @@ export const DatePicker: React.FC<DatePickerProps> = ({
             onSelect={(d) => d && onDateChange(d)}
             initialFocus
             locale={fr}
+            captionLayout="dropdown-buttons"
+            fromYear={fromYear}
+            toYear={toYear}
           />
         </PopoverContent>
       </Popover>

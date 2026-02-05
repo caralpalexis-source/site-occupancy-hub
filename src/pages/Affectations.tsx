@@ -42,6 +42,7 @@ import { Plus, Pencil, Trash2, Users, Maximize, Calendar } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { SortSelect, SortOption } from "@/components/SortSelect";
+import { FormDatePicker } from "@/components/FormDatePicker";
 
 type SortTertiaire = "personne" | "service" | "zone" | "periode_asc" | "periode_desc";
 type SortOperationnelle = "projet" | "surface_asc" | "surface_desc" | "zone" | "periode_asc" | "periode_desc";
@@ -359,21 +360,19 @@ const Affectations: React.FC = () => {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="date_debut">Date de début</Label>
-                        <Input
-                          id="date_debut"
-                          type="date"
+                        <FormDatePicker
                           value={tertiaireForm.date_debut}
-                          onChange={(e) => setTertiaireForm({ ...tertiaireForm, date_debut: e.target.value })}
+                          onChange={(value) => setTertiaireForm({ ...tertiaireForm, date_debut: value })}
+                          placeholder="Date de début"
                           required
                         />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="date_fin">Date de fin (optionnel)</Label>
-                        <Input
-                          id="date_fin"
-                          type="date"
+                        <FormDatePicker
                           value={tertiaireForm.date_fin}
-                          onChange={(e) => setTertiaireForm({ ...tertiaireForm, date_fin: e.target.value })}
+                          onChange={(value) => setTertiaireForm({ ...tertiaireForm, date_fin: value })}
+                          placeholder="Date de fin"
                         />
                       </div>
                     </div>
@@ -543,21 +542,19 @@ const Affectations: React.FC = () => {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="date_debut_op">Date de début</Label>
-                        <Input
-                          id="date_debut_op"
-                          type="date"
+                        <FormDatePicker
                           value={operationnelleForm.date_debut}
-                          onChange={(e) => setOperationnelleForm({ ...operationnelleForm, date_debut: e.target.value })}
+                          onChange={(value) => setOperationnelleForm({ ...operationnelleForm, date_debut: value })}
+                          placeholder="Date de début"
                           required
                         />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="date_fin_op">Date de fin (optionnel)</Label>
-                        <Input
-                          id="date_fin_op"
-                          type="date"
+                        <FormDatePicker
                           value={operationnelleForm.date_fin}
-                          onChange={(e) => setOperationnelleForm({ ...operationnelleForm, date_fin: e.target.value })}
+                          onChange={(value) => setOperationnelleForm({ ...operationnelleForm, date_fin: value })}
+                          placeholder="Date de fin"
                         />
                       </div>
                     </div>
