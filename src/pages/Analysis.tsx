@@ -34,11 +34,14 @@ import {
   Activity,
   Lightbulb,
   Building2,
+  CheckCircle,
+  PlusCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, eachDayOfInterval, differenceInDays } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Zone } from "@/types";
+import { toast } from "@/components/ui/sonner";
 
 const Analysis: React.FC = () => {
   const {
@@ -47,6 +50,7 @@ const Analysis: React.FC = () => {
     affectationsOperationnelles,
     getBatiments,
     getOccupationForZone,
+    addAffectationOperationnelle,
   } = useApp();
 
   // Period selection
@@ -75,6 +79,7 @@ const Analysis: React.FC = () => {
   const [availResults, setAvailResults] = useState<
     { zone: Zone; durationMonths: number }[] | null
   >(null);
+  const [assignedZoneIds, setAssignedZoneIds] = useState<Set<string>>(new Set());
 
   // Scenario analysis dialog
   const [showScenario, setShowScenario] = useState(false);
@@ -283,6 +288,35 @@ const Analysis: React.FC = () => {
     affEnd.setHours(23, 59, 59, 999);
     
     return affEnd >= closureStartNorm;
+  };
+
+  // Handle direct assignment from availability results
+  const handleAssignToZone = (zone: Zone) => {
+    if (!availProjectName.trim() || !availSurface) return;
+
+    const surfaceNeeded = parseFloat(availSurface);
+    const dateDebutStr = format(availDateDebut, "yyyy-MM-dd");
+    const dateFinStr = format(availDateFin, "yyyy-MM-dd");
+
+    addAffectationOperationnelle({
+      nom_projet: availProjectName.trim(),
+      surface_necessaire: surfaceNeeded,
+      zone_id: zone.id,
+      date_debut: dateDebutStr,
+      date_fin: dateFinStr,
+    });
+
+    setAssignedZoneIds((prev) => new Set(prev).add(zone.id));
+    toast.success(`Projet "${availProjectName}" affecté à ${zone.nom_zone}`);
+  };
+
+  // Reset assigned zones when dialog closes
+  const handleAvailabilityClose = (open: boolean) => {
+    setShowAvailability(open);
+    if (!open) {
+      setAssignedZoneIds(new Set());
+      setAvailResults(null);
+    }
   };
 
   // Scenario analysis
@@ -685,7 +719,7 @@ const Analysis: React.FC = () => {
       </div>
 
       {/* Availability Dialog */}
-      <Dialog open={showAvailability} onOpenChange={setShowAvailability}>
+      <Dialog open={showAvailability} onOpenChange={handleAvailabilityClose}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Analyse de disponibilité</DialogTitle>
@@ -742,18 +776,37 @@ const Analysis: React.FC = () => {
                       compatible{availResults.length > 1 ? "s" : ""} trouvée
                       {availResults.length > 1 ? "s" : ""}
                     </p>
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                       {availResults.map(({ zone, durationMonths }) => (
                         <div
                           key={zone.id}
-                          className="text-sm flex justify-between"
+                          className="text-sm flex items-center justify-between gap-2 p-2 bg-background rounded border"
                         >
-                          <span>
-                            {zone.nom_zone} ({zone.batiment})
-                          </span>
-                          <span className="text-muted-foreground">
-                            dispo {durationMonths} mois
-                          </span>
+                          <div className="flex-1">
+                            <span className="font-medium">
+                              {zone.nom_zone} ({zone.batiment})
+                            </span>
+                            <span className="text-muted-foreground ml-2">
+                              – dispo {durationMonths} mois
+                            </span>
+                          </div>
+                          {assignedZoneIds.has(zone.id) ? (
+                            <div className="flex items-center gap-1 text-green-600">
+                              <CheckCircle className="w-4 h-4" />
+                              <span className="text-xs">Affecté</span>
+                            </div>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleAssignToZone(zone)}
+                              disabled={!availProjectName.trim()}
+                              className="gap-1"
+                            >
+                              <PlusCircle className="w-3 h-3" />
+                              Affecter
+                            </Button>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -763,7 +816,7 @@ const Analysis: React.FC = () => {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAvailability(false)}>
+            <Button variant="outline" onClick={() => handleAvailabilityClose(false)}>
               Fermer
             </Button>
             <Button onClick={runAvailabilityAnalysis}>Rechercher</Button>
