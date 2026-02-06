@@ -97,6 +97,24 @@ const Analysis: React.FC = () => {
     projetsNonReplacables: number;
     totalPersonnesImpactees: number;
     totalProjetsImpactes: number;
+    affectedTertiaireList: {
+      id: string;
+      nom: string;
+      prenom: string;
+      zoneName: string;
+      batiment: string;
+      dateDebut: string;
+      dateFin?: string;
+    }[];
+    affectedOperationnelleList: {
+      id: string;
+      nomProjet: string;
+      surface: number;
+      zoneName: string;
+      batiment: string;
+      dateDebut: string;
+      dateFin?: string;
+    }[];
   } | null>(null);
 
   const batiments = getBatiments();
@@ -330,6 +348,12 @@ const Analysis: React.FC = () => {
       ? batimentZones.map((z) => z.id)
       : Array.from(scenarioZones);
 
+    // Helper to get zone info
+    const getZoneInfo = (zoneId: string) => {
+      const zone = zones.find((z) => z.id === zoneId);
+      return { zoneName: zone?.nom_zone || "Inconnue", batiment: zone?.batiment || "Inconnu" };
+    };
+
     let personnesSansZone = 0;
     let projetsNonReplacables = 0;
 
@@ -339,6 +363,20 @@ const Analysis: React.FC = () => {
         unavailableZoneIds.includes(a.zone_id) &&
         overlapsWithClosure(a.date_debut, a.date_fin, scenarioDateDebut, scenarioDateFin)
     );
+
+    // Build list for display
+    const affectedTertiaireList = affectedTertiaire.map((aff) => {
+      const zoneInfo = getZoneInfo(aff.zone_id);
+      return {
+        id: aff.id,
+        nom: aff.nom,
+        prenom: aff.prenom,
+        zoneName: zoneInfo.zoneName,
+        batiment: zoneInfo.batiment,
+        dateDebut: aff.date_debut,
+        dateFin: aff.date_fin,
+      };
+    });
 
     // Check if they can be relocated
     affectedTertiaire.forEach((aff) => {
@@ -374,6 +412,20 @@ const Analysis: React.FC = () => {
         overlapsWithClosure(a.date_debut, a.date_fin, scenarioDateDebut, scenarioDateFin)
     );
 
+    // Build list for display
+    const affectedOperationnelleList = affectedOperationnelle.map((aff) => {
+      const zoneInfo = getZoneInfo(aff.zone_id);
+      return {
+        id: aff.id,
+        nomProjet: aff.nom_projet,
+        surface: aff.surface_necessaire,
+        zoneName: zoneInfo.zoneName,
+        batiment: zoneInfo.batiment,
+        dateDebut: aff.date_debut,
+        dateFin: aff.date_fin,
+      };
+    });
+
     affectedOperationnelle.forEach((aff) => {
       const otherZones = zones.filter(
         (z) =>
@@ -407,6 +459,8 @@ const Analysis: React.FC = () => {
       projetsNonReplacables,
       totalPersonnesImpactees: affectedTertiaire.length,
       totalProjetsImpactes: affectedOperationnelle.length,
+      affectedTertiaireList,
+      affectedOperationnelleList,
     });
   };
 
@@ -937,15 +991,14 @@ const Analysis: React.FC = () => {
             </div>
 
             {scenarioResults !== null && (
-              <div className="p-4 bg-muted rounded-lg">
-                <p className="text-sm font-medium text-orange-600 flex items-center gap-2 mb-2">
+              <div className="p-4 bg-muted rounded-lg max-h-80 overflow-y-auto">
+                <p className="text-sm font-medium text-warning flex items-center gap-2 mb-3">
                   <AlertTriangle className="w-4 h-4" />
                   Impact estimé
                 </p>
-                <div className="space-y-1 text-sm">
-                  <p className="text-muted-foreground">
-                    Affectations impactées : {scenarioResults.totalPersonnesImpactees} personne{scenarioResults.totalPersonnesImpactees > 1 ? "s" : ""} / {scenarioResults.totalProjetsImpactes} projet{scenarioResults.totalProjetsImpactes > 1 ? "s" : ""}
-                  </p>
+                
+                {/* Summary */}
+                <div className="space-y-1 text-sm mb-4 pb-3 border-b border-border">
                   <p className="font-medium">
                     – {scenarioResults.personnesSansZone} personne
                     {scenarioResults.personnesSansZone > 1 ? "s" : ""} sans zone de repli
@@ -956,6 +1009,72 @@ const Analysis: React.FC = () => {
                     replaçable{scenarioResults.projetsNonReplacables > 1 ? "s" : ""}
                   </p>
                 </div>
+
+                {/* Detailed affected persons list */}
+                {scenarioResults.affectedTertiaireList.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                      Personnes impactées ({scenarioResults.affectedTertiaireList.length})
+                    </p>
+                    <div className="space-y-1">
+                      {scenarioResults.affectedTertiaireList.map((aff) => (
+                        <div
+                          key={aff.id}
+                          className="text-xs p-2 bg-background rounded border border-border flex flex-wrap gap-x-3 gap-y-1"
+                        >
+                          <span className="font-medium">{aff.prenom} {aff.nom}</span>
+                          <span className="text-muted-foreground">
+                            {aff.zoneName} • {aff.batiment}
+                          </span>
+                          <span className="text-muted-foreground">
+                            Du {format(new Date(aff.dateDebut), "dd/MM/yyyy", { locale: fr })}
+                            {aff.dateFin 
+                              ? ` au ${format(new Date(aff.dateFin), "dd/MM/yyyy", { locale: fr })}`
+                              : " (sans fin)"
+                            }
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Detailed affected projects list */}
+                {scenarioResults.affectedOperationnelleList.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                      Projets impactés ({scenarioResults.affectedOperationnelleList.length})
+                    </p>
+                    <div className="space-y-1">
+                      {scenarioResults.affectedOperationnelleList.map((aff) => (
+                        <div
+                          key={aff.id}
+                          className="text-xs p-2 bg-background rounded border border-border flex flex-wrap gap-x-3 gap-y-1"
+                        >
+                          <span className="font-medium">{aff.nomProjet}</span>
+                          <span className="text-muted-foreground">
+                            {aff.surface} m² • {aff.zoneName} • {aff.batiment}
+                          </span>
+                          <span className="text-muted-foreground">
+                            Du {format(new Date(aff.dateDebut), "dd/MM/yyyy", { locale: fr })}
+                            {aff.dateFin 
+                              ? ` au ${format(new Date(aff.dateFin), "dd/MM/yyyy", { locale: fr })}`
+                              : " (sans fin)"
+                            }
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* No impact message */}
+                {scenarioResults.affectedTertiaireList.length === 0 && 
+                 scenarioResults.affectedOperationnelleList.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Aucune affectation impactée sur cette période.
+                  </p>
+                )}
               </div>
             )}
           </div>
