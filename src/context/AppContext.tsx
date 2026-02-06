@@ -8,6 +8,7 @@ import {
 } from "@/types";
 
 const STORAGE_KEY = "site-management-data";
+const BUILDING_PLANS_KEY = "site-management-building-plans";
 
 interface AppContextType {
   zones: Zone[];
@@ -35,6 +36,10 @@ interface AppContextType {
   getOccupationForZone: (zoneId: string, date: Date) => OccupationStats;
   getBatiments: () => string[];
   
+  // Building plans
+  buildingPlans: Record<string, string>;
+  setBuildingPlan: (batiment: string, imageData: string) => void;
+  
   // Import/Export
   exportData: () => AppData;
   importData: (data: AppData) => void;
@@ -55,6 +60,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [affectationsTertiaires, setAffectationsTertiaires] = useState<AffectationTertiaire[]>([]);
   const [affectationsOperationnelles, setAffectationsOperationnelles] = useState<AffectationOperationnelle[]>([]);
   const [dateEtat, setDateEtat] = useState<Date>(new Date());
+  const [buildingPlans, setBuildingPlans] = useState<Record<string, string>>({});
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -67,6 +73,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setAffectationsOperationnelles(data.affectationsOperationnelles || []);
       } catch (e) {
         console.error("Error parsing stored data:", e);
+      }
+    }
+    
+    // Load building plans separately
+    const storedPlans = localStorage.getItem(BUILDING_PLANS_KEY);
+    if (storedPlans) {
+      try {
+        setBuildingPlans(JSON.parse(storedPlans));
+      } catch (e) {
+        console.error("Error parsing building plans:", e);
       }
     }
   }, []);
@@ -169,6 +185,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return [...new Set(zones.map((z) => z.batiment))];
   }, [zones]);
 
+  const setBuildingPlan = useCallback((batiment: string, imageData: string) => {
+    setBuildingPlans((prev) => {
+      const updated = { ...prev, [batiment]: imageData };
+      localStorage.setItem(BUILDING_PLANS_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
   const exportData = useCallback((): AppData => {
     return {
       zones,
@@ -202,6 +226,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteAffectationOperationnelle,
         getOccupationForZone,
         getBatiments,
+        buildingPlans,
+        setBuildingPlan,
         exportData,
         importData,
       }}

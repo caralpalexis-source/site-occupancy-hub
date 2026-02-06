@@ -5,6 +5,7 @@ import { StatCard } from "@/components/StatCard";
 import { ZoneCardExpandable } from "@/components/ZoneCardExpandable";
 import { ZoneTypeFilter, ZoneFilterType } from "@/components/ZoneTypeFilter";
 import { BuildingSummary } from "@/components/BuildingSummary";
+import { BuildingPlanUpload } from "@/components/BuildingPlanUpload";
 import { Building2, Users, Maximize, TrendingUp, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -24,6 +25,8 @@ const Dashboard: React.FC = () => {
     setDateEtat,
     getOccupationForZone,
     getBatiments,
+    buildingPlans,
+    setBuildingPlan,
   } = useApp();
 
   const [filter, setFilter] = useState<ZoneFilterType>("all");
@@ -268,8 +271,8 @@ const Dashboard: React.FC = () => {
                 open={isOpen}
                 onOpenChange={() => toggleBatiment(batiment)}
               >
-                <CollapsibleTrigger className="w-full">
-                  <div className="flex items-center gap-3 p-4 bg-card rounded-xl border border-border hover:bg-accent/50 transition-colors">
+                <CollapsibleTrigger asChild>
+                  <div className="flex items-center gap-3 p-4 bg-card rounded-xl border border-border hover:bg-accent/50 transition-colors cursor-pointer">
                     <ChevronDown
                       className={cn(
                         "w-5 h-5 text-muted-foreground transition-transform",
@@ -285,6 +288,11 @@ const Dashboard: React.FC = () => {
                         tauxMoyen={batimentStats.tauxMoyen}
                       />
                     </div>
+                    <BuildingPlanUpload
+                      batiment={batiment}
+                      planImage={buildingPlans[batiment]}
+                      onUpload={setBuildingPlan}
+                    />
                   </div>
                 </CollapsibleTrigger>
                 <CollapsibleContent>

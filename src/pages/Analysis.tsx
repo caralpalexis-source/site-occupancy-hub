@@ -95,6 +95,8 @@ const Analysis: React.FC = () => {
   const [scenarioResults, setScenarioResults] = useState<{
     personnesSansZone: number;
     projetsNonReplacables: number;
+    totalPersonnesImpactees: number;
+    totalProjetsImpactes: number;
   } | null>(null);
 
   const batiments = getBatiments();
@@ -400,7 +402,12 @@ const Analysis: React.FC = () => {
       if (!canRelocate) projetsNonReplacables++;
     });
 
-    setScenarioResults({ personnesSansZone, projetsNonReplacables });
+    setScenarioResults({ 
+      personnesSansZone, 
+      projetsNonReplacables,
+      totalPersonnesImpactees: affectedTertiaire.length,
+      totalProjetsImpactes: affectedOperationnelle.length,
+    });
   };
 
   const scenarioBatimentZones = useMemo(() => {
@@ -936,11 +943,14 @@ const Analysis: React.FC = () => {
                   Impact estimé
                 </p>
                 <div className="space-y-1 text-sm">
-                  <p>
-                    – {scenarioResults.personnesSansZone} personne
-                    {scenarioResults.personnesSansZone > 1 ? "s" : ""} sans zone
+                  <p className="text-muted-foreground">
+                    Affectations impactées : {scenarioResults.totalPersonnesImpactees} personne{scenarioResults.totalPersonnesImpactees > 1 ? "s" : ""} / {scenarioResults.totalProjetsImpactes} projet{scenarioResults.totalProjetsImpactes > 1 ? "s" : ""}
                   </p>
-                  <p>
+                  <p className="font-medium">
+                    – {scenarioResults.personnesSansZone} personne
+                    {scenarioResults.personnesSansZone > 1 ? "s" : ""} sans zone de repli
+                  </p>
+                  <p className="font-medium">
                     – {scenarioResults.projetsNonReplacables} projet
                     {scenarioResults.projetsNonReplacables > 1 ? "s" : ""} non
                     replaçable{scenarioResults.projetsNonReplacables > 1 ? "s" : ""}
