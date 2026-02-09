@@ -48,6 +48,7 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { SortSelect, SortOption } from "@/components/SortSelect";
 import { FormDatePicker } from "@/components/FormDatePicker";
+import { ExcelUploadTertiaire } from "@/components/ExcelUploadTertiaire";
 
 type SortTertiaire = "personne" | "service" | "zone" | "periode_asc" | "periode_desc";
 type SortOperationnelle = "projet" | "surface_asc" | "surface_desc" | "zone" | "periode_asc" | "periode_desc";
@@ -438,7 +439,8 @@ const Affectations: React.FC = () => {
               value={sortTertiaire}
               onChange={(v) => setSortTertiaire(v as SortTertiaire)}
             />
-            <div className="sm:ml-auto">
+            <div className="sm:ml-auto flex gap-2">
+              <ExcelUploadTertiaire />
               <Dialog open={isTertiaireOpen} onOpenChange={handleTertiaireOpenChange}>
                 <DialogTrigger asChild>
                   <Button disabled={zonesTertiaires.length === 0}>
