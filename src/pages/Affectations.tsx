@@ -38,7 +38,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, Users, Maximize, Calendar } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Plus, Pencil, Trash2, Users, Maximize, Calendar, Search, ChevronDown, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { SortSelect, SortOption } from "@/components/SortSelect";
@@ -80,9 +85,15 @@ const Affectations: React.FC = () => {
   const zonesTertiaires = zones.filter((z) => z.type === "tertiaire");
   const zonesOperationnelles = zones.filter((z) => z.type === "operationnelle");
 
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("");
+
   // Sort state
   const [sortTertiaire, setSortTertiaire] = useState<SortTertiaire>("personne");
   const [sortOperationnelle, setSortOperationnelle] = useState<SortOperationnelle>("projet");
+
+  // Collapsed services state (all collapsed by default)
+  const [expandedServices, setExpandedServices] = useState<Set<string>>(new Set());
 
   // Tertiaire form state
   const [isTertiaireOpen, setIsTertiaireOpen] = useState(false);
@@ -112,10 +123,43 @@ const Affectations: React.FC = () => {
     return zone ? `${zone.batiment} - ${zone.nom_zone}` : "Zone inconnue";
   };
 
-  // Sorted affectations tertiaires
-  const sortedAffectationsTertiaires = useMemo(() => {
-    const sorted = [...affectationsTertiaires];
+  // Filter function for search
+  const matchesSearch = (text: string) => {
+    if (!searchQuery.trim()) return true;
+    return text.toLowerCase().includes(searchQuery.toLowerCase().trim());
+  };
+
+  // Filter tertiaire affectations based on search
+  const filteredAffectationsTertiaires = useMemo(() => {
+    if (!searchQuery.trim()) return affectationsTertiaires;
     
+    return affectationsTertiaires.filter((aff) => {
+      const fullName = `${aff.nom} ${aff.prenom}`;
+      const zoneName = getZoneName(aff.zone_id);
+      return (
+        matchesSearch(fullName) ||
+        matchesSearch(aff.service) ||
+        matchesSearch(zoneName)
+      );
+    });
+  }, [affectationsTertiaires, searchQuery, zones]);
+
+  // Filter operationnelle affectations based on search
+  const filteredAffectationsOperationnelles = useMemo(() => {
+    if (!searchQuery.trim()) return affectationsOperationnelles;
+    
+    return affectationsOperationnelles.filter((aff) => {
+      const zoneName = getZoneName(aff.zone_id);
+      return (
+        matchesSearch(aff.nom_projet) ||
+        matchesSearch(zoneName)
+      );
+    });
+  }, [affectationsOperationnelles, searchQuery, zones]);
+
+  // Sort function for tertiaire
+  const sortTertiaireList = (list: AffectationTertiaire[]) => {
+    const sorted = [...list];
     sorted.sort((a, b) => {
       switch (sortTertiaire) {
         case "personne":
@@ -134,13 +178,39 @@ const Affectations: React.FC = () => {
           return 0;
       }
     });
-    
     return sorted;
-  }, [affectationsTertiaires, sortTertiaire, zones]);
+  };
+
+  // Group tertiaire affectations by service
+  const groupedByService = useMemo(() => {
+    const groups: Record<string, AffectationTertiaire[]> = {};
+    
+    filteredAffectationsTertiaires.forEach((aff) => {
+      const service = aff.service || "Sans service";
+      if (!groups[service]) {
+        groups[service] = [];
+      }
+      groups[service].push(aff);
+    });
+
+    // Sort services alphabetically
+    const sortedServices = Object.keys(groups).sort((a, b) => a.localeCompare(b, "fr"));
+    
+    // Apply tri inside each group
+    const result: { service: string; affectations: AffectationTertiaire[] }[] = [];
+    sortedServices.forEach((service) => {
+      result.push({
+        service,
+        affectations: sortTertiaireList(groups[service]),
+      });
+    });
+
+    return result;
+  }, [filteredAffectationsTertiaires, sortTertiaire, zones]);
 
   // Sorted affectations operationnelles
   const sortedAffectationsOperationnelles = useMemo(() => {
-    const sorted = [...affectationsOperationnelles];
+    const sorted = [...filteredAffectationsOperationnelles];
     
     sorted.sort((a, b) => {
       switch (sortOperationnelle) {
@@ -162,7 +232,19 @@ const Affectations: React.FC = () => {
     });
     
     return sorted;
-  }, [affectationsOperationnelles, sortOperationnelle, zones]);
+  }, [filteredAffectationsOperationnelles, sortOperationnelle, zones]);
+
+  const toggleService = (service: string) => {
+    setExpandedServices((prev) => {
+      const next = new Set(prev);
+      if (next.has(service)) {
+        next.delete(service);
+      } else {
+        next.add(service);
+      }
+      return next;
+    });
+  };
 
   // Tertiaire handlers
   const resetTertiaireForm = () => {
@@ -265,6 +347,54 @@ const Affectations: React.FC = () => {
     return format(new Date(dateStr), "d MMM yyyy", { locale: fr });
   };
 
+  // Render tertiaire row
+  const renderTertiaireRow = (aff: AffectationTertiaire) => (
+    <TableRow key={aff.id}>
+      <TableCell className="font-medium">
+        {aff.prenom} {aff.nom}
+      </TableCell>
+      <TableCell>{getZoneName(aff.zone_id)}</TableCell>
+      <TableCell>
+        <div className="flex items-center gap-1 text-sm">
+          <Calendar className="w-3 h-3" />
+          {formatDate(aff.date_debut)}
+          {aff.date_fin && ` → ${formatDate(aff.date_fin)}`}
+        </div>
+      </TableCell>
+      <TableCell className="text-right">
+        <div className="flex justify-end gap-2">
+          <Button size="sm" variant="ghost" onClick={() => handleEditTertiaire(aff)}>
+            <Pencil className="w-4 h-4" />
+          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button size="sm" variant="ghost">
+                <Trash2 className="w-4 h-4 text-destructive" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Supprimer l'affectation ?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Cette action est irréversible.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => deleteAffectationTertiaire(aff.id)}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Supprimer
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+
   return (
     <div className="p-8">
       <div className="mb-8">
@@ -274,15 +404,29 @@ const Affectations: React.FC = () => {
         </p>
       </div>
 
+      {/* Search field */}
+      <div className="mb-6">
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Rechercher par nom, service, projet ou zone..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+      </div>
+
       <Tabs defaultValue="tertiaire" className="space-y-6">
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="tertiaire" className="flex items-center gap-2">
             <Users className="w-4 h-4" />
-            Tertiaire ({affectationsTertiaires.length})
+            Tertiaire ({filteredAffectationsTertiaires.length})
           </TabsTrigger>
           <TabsTrigger value="operationnelle" className="flex items-center gap-2">
             <Maximize className="w-4 h-4" />
-            Opérationnelle ({affectationsOperationnelles.length})
+            Opérationnelle ({filteredAffectationsOperationnelles.length})
           </TabsTrigger>
         </TabsList>
 
@@ -400,78 +544,62 @@ const Affectations: React.FC = () => {
                 Créez d'abord des zones tertiaires dans la section "Zones"
               </p>
             </div>
-          ) : affectationsTertiaires.length === 0 ? (
+          ) : filteredAffectationsTertiaires.length === 0 ? (
             <div className="text-center py-16 bg-card rounded-xl border border-border">
               <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-foreground mb-2">
-                Aucune affectation tertiaire
+                {searchQuery ? "Aucun résultat" : "Aucune affectation tertiaire"}
               </h3>
               <p className="text-muted-foreground">
-                Ajoutez des personnes aux zones tertiaires
+                {searchQuery 
+                  ? "Aucune affectation ne correspond à votre recherche" 
+                  : "Ajoutez des personnes aux zones tertiaires"}
               </p>
             </div>
           ) : (
-            <div className="bg-card rounded-xl border border-border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Personne</TableHead>
-                    <TableHead>Service</TableHead>
-                    <TableHead>Zone</TableHead>
-                    <TableHead>Période</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sortedAffectationsTertiaires.map((aff) => (
-                    <TableRow key={aff.id}>
-                      <TableCell className="font-medium">
-                        {aff.prenom} {aff.nom}
-                      </TableCell>
-                      <TableCell>{aff.service}</TableCell>
-                      <TableCell>{getZoneName(aff.zone_id)}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-sm">
-                          <Calendar className="w-3 h-3" />
-                          {formatDate(aff.date_debut)}
-                          {aff.date_fin && ` → ${formatDate(aff.date_fin)}`}
+            <div className="space-y-3">
+              {groupedByService.map(({ service, affectations }) => (
+                <Collapsible
+                  key={service}
+                  open={expandedServices.has(service)}
+                  onOpenChange={() => toggleService(service)}
+                >
+                  <div className="bg-card rounded-xl border border-border overflow-hidden">
+                    <CollapsibleTrigger className="w-full">
+                      <div className="flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center gap-3">
+                          {expandedServices.has(service) ? (
+                            <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          )}
+                          <span className="font-semibold text-foreground">{service}</span>
+                          <span className="text-sm text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                            {affectations.length} personne{affectations.length > 1 ? "s" : ""}
+                          </span>
                         </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button size="sm" variant="ghost" onClick={() => handleEditTertiaire(aff)}>
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button size="sm" variant="ghost">
-                                <Trash2 className="w-4 h-4 text-destructive" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Supprimer l'affectation ?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Cette action est irréversible.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Annuler</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => deleteAffectationTertiaire(aff.id)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                >
-                                  Supprimer
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                      </div>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="border-t border-border">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Personne</TableHead>
+                              <TableHead>Zone</TableHead>
+                              <TableHead>Période</TableHead>
+                              <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {affectations.map(renderTertiaireRow)}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </CollapsibleContent>
+                  </div>
+                </Collapsible>
+              ))}
             </div>
           )}
         </TabsContent>
@@ -582,14 +710,16 @@ const Affectations: React.FC = () => {
                 Créez d'abord des zones opérationnelles dans la section "Zones"
               </p>
             </div>
-          ) : affectationsOperationnelles.length === 0 ? (
+          ) : filteredAffectationsOperationnelles.length === 0 ? (
             <div className="text-center py-16 bg-card rounded-xl border border-border">
               <Maximize className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-foreground mb-2">
-                Aucune affectation opérationnelle
+                {searchQuery ? "Aucun résultat" : "Aucune affectation opérationnelle"}
               </h3>
               <p className="text-muted-foreground">
-                Ajoutez des projets aux zones opérationnelles
+                {searchQuery 
+                  ? "Aucune affectation ne correspond à votre recherche" 
+                  : "Ajoutez des projets aux zones opérationnelles"}
               </p>
             </div>
           ) : (
