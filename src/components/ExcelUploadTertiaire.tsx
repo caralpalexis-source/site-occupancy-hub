@@ -19,7 +19,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertTriangle, Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import {
+  Upload,
+  FileSpreadsheet,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Loader2,
+  HelpCircle,
+  Check,
+  X,
+} from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 interface ParsedRow {
@@ -33,6 +44,11 @@ interface ParsedRow {
   zoneId?: string;
   error?: string;
   isDuplicate?: boolean;
+  // Fuzzy match fields
+  suggestedZoneId?: string;
+  suggestedZoneName?: string;
+  needsConfirmation?: boolean;
+  userConfirmed?: boolean; // true = accepted, false = refused, undefined = pending
 }
 
 interface ImportSummary {
@@ -40,68 +56,110 @@ interface ImportSummary {
   validRows: ParsedRow[];
   errorRows: ParsedRow[];
   duplicateRows: ParsedRow[];
+  fuzzyRows: ParsedRow[];
+}
+
+interface FinalReport {
+  totalImported: number;
+  exactMatches: number;
+  fuzzyAccepted: number;
+  unknownZone: number;
 }
 
 export const ExcelUploadTertiaire: React.FC = () => {
   const { zones, affectationsTertiaires, addAffectationTertiaire } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [importSummary, setImportSummary] = useState<ImportSummary | null>(null);
   const [fileName, setFileName] = useState("");
+  const [finalReport, setFinalReport] = useState<FinalReport | null>(null);
 
   const zonesTertiaires = zones.filter((z) => z.type === "tertiaire");
 
-  const findZoneByName = (zoneName: string) => {
-    const normalizedSearch = zoneName.trim().toLowerCase();
-    
+  const normalizeString = (s: string) =>
+    s.trim().toLowerCase().replace(/[-_/\\]/g, " ").replace(/\s+/g, " ");
+
+  const findZoneExact = (zoneName: string) => {
+    const normalizedSearch = normalizeString(zoneName);
     return zonesTertiaires.find((z) => {
-      const fullName = `${z.batiment} - ${z.nom_zone}`.toLowerCase();
-      const justName = z.nom_zone.toLowerCase();
+      const fullName = normalizeString(`${z.batiment} - ${z.nom_zone}`);
+      const justName = normalizeString(z.nom_zone);
       return fullName === normalizedSearch || justName === normalizedSearch;
     });
   };
 
+  const findZoneFuzzy = (zoneName: string) => {
+    const normalizedSearch = normalizeString(zoneName);
+    if (!normalizedSearch) return undefined;
+
+    // Check if the search term is contained in any zone name, or vice versa
+    let bestMatch: { zone: (typeof zonesTertiaires)[0]; score: number } | undefined;
+
+    for (const z of zonesTertiaires) {
+      const fullName = normalizeString(`${z.batiment} - ${z.nom_zone}`);
+      const justName = normalizeString(z.nom_zone);
+
+      let score = 0;
+
+      // Check if search term is contained in zone name
+      if (justName.includes(normalizedSearch)) {
+        score = normalizedSearch.length / justName.length;
+      } else if (fullName.includes(normalizedSearch)) {
+        score = normalizedSearch.length / fullName.length * 0.9;
+      }
+      // Check if zone name parts contain the search term
+      else {
+        const zoneParts = justName.split(/[\s/\\-]+/);
+        const searchParts = normalizedSearch.split(/[\s/\\-]+/);
+        
+        for (const sp of searchParts) {
+          if (sp.length >= 2) {
+            for (const zp of zoneParts) {
+              if (zp.includes(sp) || sp.includes(zp)) {
+                score = Math.max(score, Math.min(sp.length, zp.length) / Math.max(sp.length, zp.length) * 0.7);
+              }
+            }
+          }
+        }
+      }
+
+      if (score > 0 && (!bestMatch || score > bestMatch.score)) {
+        bestMatch = { zone: z, score };
+      }
+    }
+
+    return bestMatch?.zone;
+  };
+
   const parseExcelDate = (value: unknown): string | undefined => {
     if (!value) return undefined;
-    
     if (typeof value === "string") {
       const trimmed = value.trim();
       if (!trimmed) return undefined;
-      
       const date = new Date(trimmed);
-      if (!isNaN(date.getTime())) {
-        return date.toISOString().split("T")[0];
-      }
+      if (!isNaN(date.getTime())) return date.toISOString().split("T")[0];
       return undefined;
     }
-    
     if (typeof value === "number") {
       const excelEpoch = new Date(1899, 11, 30);
       const date = new Date(excelEpoch.getTime() + value * 24 * 60 * 60 * 1000);
       return date.toISOString().split("T")[0];
     }
-    
-    if (value instanceof Date) {
-      return value.toISOString().split("T")[0];
-    }
-    
+    if (value instanceof Date) return value.toISOString().split("T")[0];
     return undefined;
   };
 
-  const isDuplicateAffectation = (row: ParsedRow): boolean => {
-    if (!row.zoneId) return false;
-    
+  const isDuplicateAffectation = (row: ParsedRow, zoneId: string): boolean => {
     return affectationsTertiaires.some((existing) => {
-      const samePerson = 
+      const samePerson =
         existing.nom.toLowerCase() === row.nom.toLowerCase() &&
         existing.prenom.toLowerCase() === row.prenom.toLowerCase();
-      const sameZone = existing.zone_id === row.zoneId;
-      const sameDates = 
+      const sameZone = existing.zone_id === zoneId;
+      const sameDates =
         existing.date_debut === row.date_debut &&
         (existing.date_fin || "") === (row.date_fin || "");
-      
       return samePerson && sameZone && sameDates;
     });
   };
@@ -109,31 +167,29 @@ export const ExcelUploadTertiaire: React.FC = () => {
   const processFile = async (file: File) => {
     setIsProcessing(true);
     setFileName(file.name);
+    setFinalReport(null);
 
     try {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data, { type: "array", cellDates: true });
-      
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
-      
       const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { raw: false, defval: "" });
-      
+
       const parsedRows: ParsedRow[] = [];
-      
+
       jsonData.forEach((row, index) => {
         const rowNumber = index + 2;
-        
         const nom = String(row["Nom"] || row["nom"] || "").trim();
         const prenom = String(row["Prénom"] || row["Prenom"] || row["prenom"] || "").trim();
         const service = String(row["Service"] || row["service"] || "").trim();
         const zoneName = String(row["Zone"] || row["zone"] || "").trim();
         const dateDebutRaw = row["Date_debut"] || row["date_debut"] || row["Date debut"] || "";
         const dateFinRaw = row["Date_fin"] || row["date_fin"] || row["Date fin"] || "";
-        
+
         const date_debut = parseExcelDate(dateDebutRaw);
         const date_fin = parseExcelDate(dateFinRaw);
-        
+
         const parsedRow: ParsedRow = {
           rowNumber,
           nom,
@@ -143,41 +199,52 @@ export const ExcelUploadTertiaire: React.FC = () => {
           date_debut: date_debut || "",
           date_fin,
         };
-        
+
+        // Validate required fields (nom, prenom, service, date_debut)
         if (!nom) {
           parsedRow.error = "Nom manquant";
         } else if (!prenom) {
           parsedRow.error = "Prénom manquant";
         } else if (!service) {
           parsedRow.error = "Service manquant";
-        } else if (!zoneName) {
-          parsedRow.error = "Zone manquante";
         } else if (!date_debut) {
           parsedRow.error = "Date de début invalide ou manquante";
         } else {
-          const zone = findZoneByName(zoneName);
-          if (!zone) {
-            parsedRow.error = `Zone "${zoneName}" non trouvée`;
+          // Zone resolution: exact → fuzzy → INCONNUE
+          if (zoneName) {
+            const exactZone = findZoneExact(zoneName);
+            if (exactZone) {
+              parsedRow.zoneId = exactZone.id;
+              parsedRow.isDuplicate = isDuplicateAffectation(parsedRow, exactZone.id);
+            } else {
+              const fuzzyZone = findZoneFuzzy(zoneName);
+              if (fuzzyZone) {
+                // Mark for user confirmation
+                parsedRow.needsConfirmation = true;
+                parsedRow.suggestedZoneId = fuzzyZone.id;
+                parsedRow.suggestedZoneName = `${fuzzyZone.batiment} - ${fuzzyZone.nom_zone}`;
+                // Default: not yet decided
+                parsedRow.userConfirmed = undefined;
+              } else {
+                // No match at all → INCONNUE
+                parsedRow.zoneId = "INCONNUE";
+              }
+            }
           } else {
-            parsedRow.zoneId = zone.id;
-            parsedRow.isDuplicate = isDuplicateAffectation(parsedRow);
+            // No zone specified → INCONNUE
+            parsedRow.zoneId = "INCONNUE";
           }
         }
-        
+
         parsedRows.push(parsedRow);
       });
-      
-      const validRows = parsedRows.filter((r) => !r.error && !r.isDuplicate);
+
+      const validRows = parsedRows.filter((r) => !r.error && !r.isDuplicate && !r.needsConfirmation);
       const errorRows = parsedRows.filter((r) => r.error);
       const duplicateRows = parsedRows.filter((r) => !r.error && r.isDuplicate);
-      
-      setImportSummary({
-        totalRows: parsedRows.length,
-        validRows,
-        errorRows,
-        duplicateRows,
-      });
-      
+      const fuzzyRows = parsedRows.filter((r) => !r.error && r.needsConfirmation);
+
+      setImportSummary({ totalRows: parsedRows.length, validRows, errorRows, duplicateRows, fuzzyRows });
       setIsDialogOpen(true);
     } catch (error) {
       console.error("Error processing Excel file:", error);
@@ -188,51 +255,99 @@ export const ExcelUploadTertiaire: React.FC = () => {
       });
     } finally {
       setIsProcessing(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      processFile(file);
-    }
+    if (file) processFile(file);
   };
+
+  const handleFuzzyDecision = (rowNumber: number, accepted: boolean) => {
+    if (!importSummary) return;
+
+    setImportSummary((prev) => {
+      if (!prev) return prev;
+      const updatedFuzzy = prev.fuzzyRows.map((r) => {
+        if (r.rowNumber === rowNumber) {
+          return { ...r, userConfirmed: accepted };
+        }
+        return r;
+      });
+      return { ...prev, fuzzyRows: updatedFuzzy };
+    });
+  };
+
+  const allFuzzyDecided = importSummary?.fuzzyRows.every((r) => r.userConfirmed !== undefined) ?? true;
 
   const handleConfirmImport = () => {
     if (!importSummary) return;
-    
+
     let importedCount = 0;
-    
+    let exactMatches = 0;
+    let fuzzyAccepted = 0;
+    let unknownZone = 0;
+
+    // Import valid rows (exact matches + unknown zones)
     importSummary.validRows.forEach((row) => {
-      if (row.zoneId) {
+      addAffectationTertiaire({
+        nom: row.nom,
+        prenom: row.prenom,
+        service: row.service,
+        zone_id: row.zoneId || "INCONNUE",
+        date_debut: row.date_debut,
+        date_fin: row.date_fin,
+      });
+      importedCount++;
+      if (row.zoneId === "INCONNUE") {
+        unknownZone++;
+      } else {
+        exactMatches++;
+      }
+    });
+
+    // Import fuzzy rows based on user decisions
+    importSummary.fuzzyRows.forEach((row) => {
+      if (row.userConfirmed === true && row.suggestedZoneId) {
+        // User accepted the suggestion
         addAffectationTertiaire({
           nom: row.nom,
           prenom: row.prenom,
           service: row.service,
-          zone_id: row.zoneId,
+          zone_id: row.suggestedZoneId,
           date_debut: row.date_debut,
           date_fin: row.date_fin,
         });
         importedCount++;
+        fuzzyAccepted++;
+      } else if (row.userConfirmed === false) {
+        // User refused → INCONNUE
+        addAffectationTertiaire({
+          nom: row.nom,
+          prenom: row.prenom,
+          service: row.service,
+          zone_id: "INCONNUE",
+          date_debut: row.date_debut,
+          date_fin: row.date_fin,
+        });
+        importedCount++;
+        unknownZone++;
       }
     });
-    
-    toast({
-      title: "Import réussi",
-      description: `${importedCount} affectation(s) tertiaire(s) importée(s).`,
-    });
-    
-    setIsDialogOpen(false);
-    setImportSummary(null);
+
+    setFinalReport({ totalImported: importedCount, exactMatches, fuzzyAccepted, unknownZone });
   };
 
-  const handleCancel = () => {
+  const handleClose = () => {
     setIsDialogOpen(false);
     setImportSummary(null);
+    setFinalReport(null);
   };
+
+  const importableCount =
+    (importSummary?.validRows.length ?? 0) +
+    (importSummary?.fuzzyRows.filter((r) => r.userConfirmed !== undefined).length ?? 0);
 
   return (
     <>
@@ -243,11 +358,11 @@ export const ExcelUploadTertiaire: React.FC = () => {
         onChange={handleFileChange}
         className="hidden"
       />
-      
+
       <Button
         variant="outline"
         onClick={() => fileInputRef.current?.click()}
-        disabled={isProcessing || zonesTertiaires.length === 0}
+        disabled={isProcessing}
       >
         {isProcessing ? (
           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -258,38 +373,69 @@ export const ExcelUploadTertiaire: React.FC = () => {
       </Button>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[700px] max-h-[85vh]">
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5" />
               Import des affectations tertiaires
             </DialogTitle>
-            <DialogDescription>
-              Fichier : {fileName}
-            </DialogDescription>
+            <DialogDescription>Fichier : {fileName}</DialogDescription>
           </DialogHeader>
 
-          {importSummary && (
+          {/* Final report */}
+          {finalReport && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-primary">
+                <CheckCircle2 className="w-6 h-6" />
+                <h3 className="text-lg font-semibold">Import terminé</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 bg-muted rounded-lg">
+                  <div className="text-2xl font-bold">{finalReport.totalImported}</div>
+                  <div className="text-sm text-muted-foreground">affectations importées</div>
+                </div>
+                <div className="p-3 bg-primary/10 rounded-lg">
+                  <div className="text-2xl font-bold text-primary">{finalReport.exactMatches}</div>
+                  <div className="text-sm text-muted-foreground">correspondances exactes</div>
+                </div>
+                <div className="p-3 bg-accent rounded-lg">
+                  <div className="text-2xl font-bold text-accent-foreground">{finalReport.fuzzyAccepted}</div>
+                  <div className="text-sm text-muted-foreground">zones proposées acceptées</div>
+                </div>
+                <div className="p-3 bg-secondary rounded-lg">
+                  <div className="text-2xl font-bold text-secondary-foreground">{finalReport.unknownZone}</div>
+                  <div className="text-sm text-muted-foreground">zones inconnues</div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button onClick={handleClose}>Fermer</Button>
+              </DialogFooter>
+            </div>
+          )}
+
+          {/* Pre-import summary */}
+          {importSummary && !finalReport && (
             <div className="space-y-4">
               {/* Summary stats */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3 bg-muted rounded-lg text-center">
                   <div className="text-2xl font-bold">{importSummary.totalRows}</div>
-                  <div className="text-sm text-muted-foreground">lignes détectées</div>
+                  <div className="text-xs text-muted-foreground">lignes</div>
                 </div>
-                <div className="flex items-center gap-2 p-3 bg-primary/10 rounded-lg">
-                  <CheckCircle2 className="w-5 h-5 text-primary" />
-                  <div>
-                    <div className="text-2xl font-bold text-primary">{importSummary.validRows.length}</div>
-                    <div className="text-xs text-muted-foreground">valides</div>
-                  </div>
+                <div className="p-3 bg-primary/10 rounded-lg text-center">
+                  <CheckCircle2 className="w-4 h-4 text-primary mx-auto mb-1" />
+                  <div className="text-2xl font-bold text-primary">{importSummary.validRows.length}</div>
+                  <div className="text-xs text-muted-foreground">valides</div>
                 </div>
-                <div className="flex items-center gap-2 p-3 bg-destructive/10 rounded-lg">
-                  <XCircle className="w-5 h-5 text-destructive" />
-                  <div>
-                    <div className="text-2xl font-bold text-destructive">{importSummary.errorRows.length}</div>
-                    <div className="text-xs text-muted-foreground">erreurs</div>
-                  </div>
+                <div className="p-3 bg-accent rounded-lg text-center">
+                  <HelpCircle className="w-4 h-4 text-accent-foreground mx-auto mb-1" />
+                  <div className="text-2xl font-bold text-accent-foreground">{importSummary.fuzzyRows.length}</div>
+                  <div className="text-xs text-muted-foreground">à confirmer</div>
+                </div>
+                <div className="p-3 bg-destructive/10 rounded-lg text-center">
+                  <XCircle className="w-4 h-4 text-destructive mx-auto mb-1" />
+                  <div className="text-2xl font-bold text-destructive">{importSummary.errorRows.length}</div>
+                  <div className="text-xs text-muted-foreground">erreurs</div>
                 </div>
               </div>
 
@@ -308,18 +454,93 @@ export const ExcelUploadTertiaire: React.FC = () => {
                 </div>
               )}
 
+              {/* Fuzzy match rows requiring confirmation */}
+              {importSummary.fuzzyRows.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="font-medium text-accent-foreground flex items-center gap-2">
+                    <HelpCircle className="w-4 h-4" />
+                    Zones à confirmer ({importSummary.fuzzyRows.length})
+                  </h4>
+                  <ScrollArea className="max-h-[200px] border rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-12">Ligne</TableHead>
+                          <TableHead>Personne</TableHead>
+                          <TableHead>Zone Excel</TableHead>
+                          <TableHead>Zone proposée</TableHead>
+                          <TableHead className="w-24 text-center">Action</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {importSummary.fuzzyRows.map((row) => (
+                          <TableRow key={row.rowNumber}>
+                            <TableCell className="font-mono text-sm">{row.rowNumber}</TableCell>
+                            <TableCell className="text-sm">{row.prenom} {row.nom}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="font-mono text-xs">
+                                {row.zoneName}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary" className="text-xs">
+                                {row.suggestedZoneName}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center justify-center gap-1">
+                                {row.userConfirmed === undefined ? (
+                                  <>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7 text-primary hover:text-primary hover:bg-primary/10"
+                                      onClick={() => handleFuzzyDecision(row.rowNumber, true)}
+                                      title="Accepter la zone proposée"
+                                    >
+                                      <Check className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                      onClick={() => handleFuzzyDecision(row.rowNumber, false)}
+                                      title="Refuser → zone inconnue"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </Button>
+                                  </>
+                                ) : row.userConfirmed ? (
+                                  <Badge className="bg-primary/10 text-primary border-0 text-xs cursor-pointer" onClick={() => handleFuzzyDecision(row.rowNumber, false)}>
+                                    ✓ Accepté
+                                  </Badge>
+                                ) : (
+                                  <Badge className="bg-secondary text-secondary-foreground border-0 text-xs cursor-pointer" onClick={() => handleFuzzyDecision(row.rowNumber, true)}>
+                                    Zone inconnue
+                                  </Badge>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </ScrollArea>
+                </div>
+              )}
+
               {/* Error details */}
               {importSummary.errorRows.length > 0 && (
                 <div className="space-y-2">
                   <h4 className="font-medium text-destructive flex items-center gap-2">
                     <XCircle className="w-4 h-4" />
-                    Lignes en erreur
+                    Lignes en erreur ({importSummary.errorRows.length})
                   </h4>
-                  <ScrollArea className="h-[150px] border rounded-lg">
+                  <ScrollArea className="max-h-[150px] border rounded-lg">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="w-16">Ligne</TableHead>
+                          <TableHead className="w-12">Ligne</TableHead>
                           <TableHead>Données</TableHead>
                           <TableHead>Erreur</TableHead>
                         </TableRow>
@@ -327,13 +548,11 @@ export const ExcelUploadTertiaire: React.FC = () => {
                       <TableBody>
                         {importSummary.errorRows.map((row) => (
                           <TableRow key={row.rowNumber}>
-                            <TableCell className="font-mono">{row.rowNumber}</TableCell>
+                            <TableCell className="font-mono text-sm">{row.rowNumber}</TableCell>
                             <TableCell className="text-sm">
                               {row.prenom} {row.nom} - {row.zoneName || "(vide)"}
                             </TableCell>
-                            <TableCell className="text-destructive text-sm">
-                              {row.error}
-                            </TableCell>
+                            <TableCell className="text-destructive text-sm">{row.error}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -347,9 +566,9 @@ export const ExcelUploadTertiaire: React.FC = () => {
                 <div className="space-y-2">
                   <h4 className="font-medium text-primary flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4" />
-                    Affectations à importer ({importSummary.validRows.length})
+                    Affectations prêtes ({importSummary.validRows.length})
                   </h4>
-                  <ScrollArea className="h-[200px] border rounded-lg">
+                  <ScrollArea className="max-h-[200px] border rounded-lg">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -364,7 +583,13 @@ export const ExcelUploadTertiaire: React.FC = () => {
                           <TableRow key={row.rowNumber}>
                             <TableCell>{row.prenom} {row.nom}</TableCell>
                             <TableCell>{row.service}</TableCell>
-                            <TableCell>{row.zoneName}</TableCell>
+                            <TableCell>
+                              {row.zoneId === "INCONNUE" ? (
+                                <Badge variant="outline" className="text-xs">Zone inconnue</Badge>
+                              ) : (
+                                row.zoneName
+                              )}
+                            </TableCell>
                             <TableCell className="text-sm">
                               {row.date_debut}
                               {row.date_fin && ` → ${row.date_fin}`}
@@ -376,21 +601,26 @@ export const ExcelUploadTertiaire: React.FC = () => {
                   </ScrollArea>
                 </div>
               )}
+
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button variant="outline" onClick={handleClose}>
+                  Annuler
+                </Button>
+                <Button
+                  onClick={handleConfirmImport}
+                  disabled={importableCount === 0 || !allFuzzyDecided}
+                >
+                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                  Confirmer l'import ({importableCount})
+                  {!allFuzzyDecided && importSummary.fuzzyRows.length > 0 && (
+                    <span className="ml-1 text-xs opacity-70">
+                      ({importSummary.fuzzyRows.filter((r) => r.userConfirmed === undefined).length} à confirmer)
+                    </span>
+                  )}
+                </Button>
+              </DialogFooter>
             </div>
           )}
-
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={handleCancel}>
-              Annuler
-            </Button>
-            <Button
-              onClick={handleConfirmImport}
-              disabled={!importSummary || importSummary.validRows.length === 0}
-            >
-              <CheckCircle2 className="w-4 h-4 mr-2" />
-              Confirmer l'import ({importSummary?.validRows.length || 0})
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
