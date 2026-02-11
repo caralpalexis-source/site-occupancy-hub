@@ -43,7 +43,6 @@ export const DroppableZoneCard: React.FC<DroppableZoneCardProps> = ({
   const { isOver, setNodeRef } = useDroppable({
     id: `zone-${zone.id}`,
     data: { zone },
-    disabled: !isOperationnelle,
   });
 
   const affectations = isOperationnelle
@@ -56,7 +55,7 @@ export const DroppableZoneCard: React.FC<DroppableZoneCardProps> = ({
         <div
           className={cn(
             "zone-card group transition-all duration-200",
-            isOver && isOperationnelle && "ring-2 ring-primary shadow-lg scale-[1.02] bg-primary/5",
+            isOver && "ring-2 ring-primary shadow-lg scale-[1.02] bg-primary/5",
             isOverCapacity && "ring-2 ring-destructive/50"
           )}
         >
