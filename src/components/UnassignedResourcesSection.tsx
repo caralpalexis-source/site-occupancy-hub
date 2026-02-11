@@ -1,38 +1,24 @@
-import React, { useState } from "react";
+import React from "react";
 import { useDraggable } from "@dnd-kit/core";
-import { AffectationTertiaire, AffectationOperationnelle } from "@/types";
+import { AffectationOperationnelle, AffectationTertiaire } from "@/types";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { ChevronDown, UserX, GripVertical, Users, Maximize } from "lucide-react";
+import { ChevronDown, HelpCircle, GripVertical, Maximize, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
-export interface UnassignedTertiaire {
-  nom: string;
-  prenom: string;
-  service: string;
-  /** Most recent affectation for reference, but it's NOT active today */
-  lastAffectation?: AffectationTertiaire;
+interface DraggableUnknownTertiaireProps {
+  affectation: AffectationTertiaire;
 }
 
-export interface UnassignedOperationnelle {
-  nom_projet: string;
-  surface_necessaire: number;
-  lastAffectation?: AffectationOperationnelle;
-}
-
-interface DraggableUnassignedTertiaireProps {
-  resource: UnassignedTertiaire;
-}
-
-const DraggableUnassignedTertiaire: React.FC<DraggableUnassignedTertiaireProps> = ({ resource }) => {
-  const dragId = `unassigned-t-${resource.nom}-${resource.prenom}-${resource.service}`;
+const DraggableUnknownTertiaire: React.FC<DraggableUnknownTertiaireProps> = ({ affectation }) => {
+  const dragId = `unknown-t-${affectation.id}`;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: dragId,
-    data: { type: "unassigned-tertiaire", resource },
+    data: { type: "unknown-tertiaire", affectationTertiaire: affectation },
   });
 
   const style = transform
@@ -56,29 +42,32 @@ const DraggableUnassignedTertiaire: React.FC<DraggableUnassignedTertiaireProps> 
       >
         <GripVertical className="w-3.5 h-3.5" />
       </button>
+
       <Users className="w-3.5 h-3.5 text-primary shrink-0" />
+
       <div className="flex-1 min-w-0">
         <span className="font-medium text-foreground">
-          {resource.prenom} {resource.nom}
+          {affectation.prenom} {affectation.nom}
         </span>
-        <p className="text-xs text-muted-foreground">{resource.service}</p>
+        <p className="text-xs text-muted-foreground">{affectation.service}</p>
       </div>
+
       <Badge variant="secondary" className="text-[10px] shrink-0">
-        Non affecté
+        Zone inconnue
       </Badge>
     </div>
   );
 };
 
-interface DraggableUnassignedOperationnelleProps {
-  resource: UnassignedOperationnelle;
+interface DraggableUnknownOperationnelleProps {
+  affectation: AffectationOperationnelle;
 }
 
-const DraggableUnassignedOperationnelle: React.FC<DraggableUnassignedOperationnelleProps> = ({ resource }) => {
-  const dragId = `unassigned-o-${resource.nom_projet}`;
+const DraggableUnknownOperationnelle: React.FC<DraggableUnknownOperationnelleProps> = ({ affectation }) => {
+  const dragId = `unknown-o-${affectation.id}`;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: dragId,
-    data: { type: "unassigned-operationnelle", resource },
+    data: { type: "unknown-operationnelle", affectation },
   });
 
   const style = transform
@@ -102,21 +91,24 @@ const DraggableUnassignedOperationnelle: React.FC<DraggableUnassignedOperationne
       >
         <GripVertical className="w-3.5 h-3.5" />
       </button>
+
       <Maximize className="w-3.5 h-3.5 text-accent shrink-0" />
+
       <div className="flex-1 min-w-0">
-        <span className="font-medium text-foreground">{resource.nom_projet}</span>
-        <p className="text-xs text-muted-foreground">{resource.surface_necessaire} m²</p>
+        <span className="font-medium text-foreground">{affectation.nom_projet}</span>
+        <p className="text-xs text-muted-foreground">{affectation.surface_necessaire} m²</p>
       </div>
+
       <Badge variant="secondary" className="text-[10px] shrink-0">
-        Non affecté
+        Zone inconnue
       </Badge>
     </div>
   );
 };
 
 interface UnassignedResourcesSectionProps {
-  tertiaires: UnassignedTertiaire[];
-  operationnelles: UnassignedOperationnelle[];
+  tertiaires: AffectationTertiaire[];
+  operationnelles: AffectationOperationnelle[];
   isOpen: boolean;
   onToggle: () => void;
 }
@@ -128,7 +120,6 @@ export const UnassignedResourcesSection: React.FC<UnassignedResourcesSectionProp
   onToggle,
 }) => {
   const total = tertiaires.length + operationnelles.length;
-
   if (total === 0) return null;
 
   return (
@@ -141,22 +132,23 @@ export const UnassignedResourcesSection: React.FC<UnassignedResourcesSectionProp
               isOpen && "rotate-180"
             )}
           />
+
           <div className="flex-1 flex items-center gap-3">
-            <UserX className="w-5 h-5 text-muted-foreground" />
+            <HelpCircle className="w-5 h-5 text-muted-foreground" />
             <div>
-              <h2 className="text-sm font-semibold text-foreground">
-                Sans Affectation
-              </h2>
+              <h2 className="text-sm font-semibold text-foreground">Zone inconnue</h2>
               <p className="text-xs text-muted-foreground">
-                {total} ressource{total > 1 ? "s" : ""} sans affectation active aujourd'hui
+                {total} affectation{total > 1 ? "s" : ""} active{total > 1 ? "s" : ""} aujourd'hui
               </p>
             </div>
           </div>
+
           <Badge variant="outline" className="text-xs">
             {total}
           </Badge>
         </div>
       </CollapsibleTrigger>
+
       <CollapsibleContent>
         <div className="pt-3 pl-8 space-y-4">
           {tertiaires.length > 0 && (
@@ -165,26 +157,21 @@ export const UnassignedResourcesSection: React.FC<UnassignedResourcesSectionProp
                 <Users className="w-4 h-4" /> Tertiaire ({tertiaires.length})
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-                {tertiaires.map((r) => (
-                  <DraggableUnassignedTertiaire
-                    key={`${r.nom}-${r.prenom}-${r.service}`}
-                    resource={r}
-                  />
+                {tertiaires.map((a) => (
+                  <DraggableUnknownTertiaire key={a.id} affectation={a} />
                 ))}
               </div>
             </div>
           )}
+
           {operationnelles.length > 0 && (
             <div>
               <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
                 <Maximize className="w-4 h-4" /> Opérationnel ({operationnelles.length})
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-                {operationnelles.map((r) => (
-                  <DraggableUnassignedOperationnelle
-                    key={r.nom_projet}
-                    resource={r}
-                  />
+                {operationnelles.map((a) => (
+                  <DraggableUnknownOperationnelle key={a.id} affectation={a} />
                 ))}
               </div>
             </div>
