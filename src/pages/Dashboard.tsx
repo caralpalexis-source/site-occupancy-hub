@@ -7,7 +7,6 @@ import { DragOverlayContent } from "@/components/DragOverlayContent";
 import { ZoneTypeFilter, ZoneFilterType } from "@/components/ZoneTypeFilter";
 import { BuildingSummary } from "@/components/BuildingSummary";
 import { BuildingPlanUpload } from "@/components/BuildingPlanUpload";
-import { UnassignedResourcesSection } from "@/components/UnassignedResourcesSection";
 import { Building2, Users, Maximize, TrendingUp, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -30,7 +29,7 @@ import { toast } from "@/hooks/use-toast";
 import { AffectationOperationnelle, AffectationTertiaire } from "@/types";
 
 interface ActiveDragState {
-  type: "operationnelle" | "tertiaire" | "unknown-tertiaire" | "unknown-operationnelle";
+  type: "operationnelle" | "tertiaire";
   affectation?: AffectationOperationnelle;
   affectationTertiaire?: AffectationTertiaire;
 }
@@ -54,7 +53,6 @@ const Dashboard: React.FC = () => {
 
   const [filter, setFilter] = useState<ZoneFilterType>("all");
   const [openBatiments, setOpenBatiments] = useState<Set<string>>(new Set());
-  const [openUnassigned, setOpenUnassigned] = useState(false);
   const [activeDrag, setActiveDrag] = useState<ActiveDragState | null>(null);
 
   const sensors = useSensors(
@@ -75,30 +73,10 @@ const Dashboard: React.FC = () => {
     return fin >= checkDate;
   };
 
-  // --- Zone inconnue (actif aujourd'hui, sans déduplication) ---
-  const unknownZoneAffectations = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const tertiaires = affectationsTertiaires.filter(
-      (a) => a.zone_id === "INCONNUE" && isActiveAtDate(a.date_debut, a.date_fin, today)
-    );
-
-    const operationnelles = affectationsOperationnelles.filter(
-      (a) => a.zone_id === "INCONNUE" && isActiveAtDate(a.date_debut, a.date_fin, today)
-    );
-
-    return { tertiaires, operationnelles };
-  }, [affectationsTertiaires, affectationsOperationnelles]);
-
   // --- DnD handlers ---
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const data = event.active.data.current;
-    if (data?.type === "unknown-tertiaire" && data?.affectationTertiaire) {
-      setActiveDrag({ type: "unknown-tertiaire", affectationTertiaire: data.affectationTertiaire });
-    } else if (data?.type === "unknown-operationnelle" && data?.affectation) {
-      setActiveDrag({ type: "unknown-operationnelle", affectation: data.affectation });
-    } else if (data?.type === "tertiaire" && data?.affectationTertiaire) {
+    if (data?.type === "tertiaire" && data?.affectationTertiaire) {
       setActiveDrag({ type: "tertiaire", affectationTertiaire: data.affectationTertiaire });
     } else if (data?.affectation) {
       setActiveDrag({ type: "operationnelle", affectation: data.affectation });
@@ -118,88 +96,6 @@ const Dashboard: React.FC = () => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const todayStr = format(today, "yyyy-MM-dd");
-
-      // --- Handle unknown-zone tertiaire affectation drop ---
-      if (data?.type === "unknown-tertiaire") {
-        const aff = data.affectationTertiaire as AffectationTertiaire | undefined;
-        if (!aff) return;
-
-        if (targetZone.type !== "tertiaire") {
-          toast({
-            title: "Zone incompatible",
-            description: "Une ressource tertiaire ne peut être affectée qu'à une zone tertiaire.",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        if (aff.zone_id !== "INCONNUE" || !isActiveAtDate(aff.date_debut, aff.date_fin, today)) {
-          toast({
-            title: "Aucune affectation active à modifier",
-            description: "Cette affectation n'est pas active aujourd'hui en zone inconnue.",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        updateAffectationTertiaire({ ...aff, zone_id: targetZone.id, date_debut: todayStr, date_fin: undefined });
-
-        const targetStats = getOccupationForZone(targetZone.id, today);
-        if (targetStats.occupation + 1 > targetZone.capacite_max) {
-          toast({
-            title: `⚠️ Capacité dépassée dans ${targetZone.nom_zone}`,
-            description: `${targetStats.occupation + 1} / ${targetZone.capacite_max} pers.`,
-          });
-        }
-
-        toast({
-          title: `Ressource affectée à ${targetZone.nom_zone}`,
-          description: `${aff.prenom} ${aff.nom} à partir du ${format(today, "dd/MM/yyyy")}`,
-        });
-        return;
-      }
-
-      // --- Handle unknown-zone operationnelle affectation drop ---
-      if (data?.type === "unknown-operationnelle") {
-        const aff = data.affectation as AffectationOperationnelle | undefined;
-        if (!aff) return;
-
-        if (targetZone.type !== "operationnelle") {
-          toast({
-            title: "Zone incompatible",
-            description: "Un projet opérationnel ne peut être affecté qu'à une zone opérationnelle.",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        if (aff.zone_id !== "INCONNUE" || !isActiveAtDate(aff.date_debut, aff.date_fin, today)) {
-          toast({
-            title: "Aucune affectation active à modifier",
-            description: "Cette affectation n'est pas active aujourd'hui en zone inconnue.",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        updateAffectationOperationnelle({ ...aff, zone_id: targetZone.id, date_debut: todayStr, date_fin: undefined });
-
-        const targetStats = getOccupationForZone(targetZone.id, today);
-        const newOccupation = targetStats.occupation + aff.surface_necessaire;
-        if (newOccupation > targetZone.capacite_max) {
-          toast({
-            title: `⚠️ Capacité dépassée dans ${targetZone.nom_zone}`,
-            description: `${newOccupation} / ${targetZone.capacite_max} m²`,
-          });
-        }
-
-        toast({
-          title: `Ressource affectée à ${targetZone.nom_zone}`,
-          description: `${aff.nom_projet} à partir du ${format(today, "dd/MM/yyyy")}`,
-        });
-        return;
-      }
-
 
       // --- Handle existing tertiaire affectation drag ---
       if (data?.type === "tertiaire") {
@@ -423,7 +319,7 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Zones by Building */}
-        {sortedBatiments.length === 0 && (unknownZoneAffectations.tertiaires.length + unknownZoneAffectations.operationnelles.length) === 0 ? (
+        {sortedBatiments.length === 0 ? (
           <div className="text-center py-16 bg-card rounded-xl border border-border">
             <Building2 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-foreground mb-2">
@@ -497,22 +393,14 @@ const Dashboard: React.FC = () => {
                 </Collapsible>
               );
             })}
-
-            {/* Zone inconnue section */}
-            <UnassignedResourcesSection
-              tertiaires={unknownZoneAffectations.tertiaires}
-              operationnelles={unknownZoneAffectations.operationnelles}
-              isOpen={openUnassigned}
-              onToggle={() => setOpenUnassigned((v) => !v)}
-            />
           </div>
         )}
       </div>
 
       <DragOverlay dropAnimation={{ duration: 200, easing: "ease" }}>
-        {activeDrag?.type === "operationnelle" || activeDrag?.type === "unknown-operationnelle" ? (
+        {activeDrag?.type === "operationnelle" ? (
           <DragOverlayContent affectation={activeDrag.affectation} />
-        ) : activeDrag?.type === "tertiaire" || activeDrag?.type === "unknown-tertiaire" ? (
+        ) : activeDrag?.type === "tertiaire" ? (
           <DragOverlayContent affectationTertiaire={activeDrag.affectationTertiaire} />
         ) : null}
       </DragOverlay>
