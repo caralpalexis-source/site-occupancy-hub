@@ -31,11 +31,12 @@ import {
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
-import { AffectationOperationnelle } from "@/types";
+import { AffectationOperationnelle, AffectationTertiaire } from "@/types";
 
 interface ActiveDragState {
-  type: "operationnelle" | "unassigned-tertiaire" | "unassigned-operationnelle";
+  type: "operationnelle" | "tertiaire" | "unassigned-tertiaire" | "unassigned-operationnelle";
   affectation?: AffectationOperationnelle;
+  affectationTertiaire?: AffectationTertiaire;
   unassignedTertiaire?: UnassignedTertiaire;
   unassignedOperationnelle?: UnassignedOperationnelle;
 }
@@ -54,6 +55,8 @@ const Dashboard: React.FC = () => {
     updateAffectationOperationnelle,
     addAffectationOperationnelle,
     addAffectationTertiaire,
+    updateAffectationTertiaire,
+    deleteAffectationTertiaire,
   } = useApp();
 
   const [filter, setFilter] = useState<ZoneFilterType>("all");
@@ -84,40 +87,58 @@ const Dashboard: React.FC = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    const isResourceUnassigned = (
+      activeAffectations: { zone_id: string }[]
+    ): boolean => {
+      if (activeAffectations.length === 0) return true;
+      return activeAffectations.every((a) => a.zone_id === "INCONNUE");
+    };
+
     // Tertiaire: unique persons by nom+prenom+service
-    const personKeys = new Map<string, UnassignedTertiaire>();
+    const personKeys = new Map<string, { person: UnassignedTertiaire; activeAffs: AffectationTertiaire[] }>();
     affectationsTertiaires.forEach((a) => {
       const key = `${a.nom}||${a.prenom}||${a.service}`;
       if (!personKeys.has(key)) {
-        personKeys.set(key, { nom: a.nom, prenom: a.prenom, service: a.service });
+        personKeys.set(key, {
+          person: { nom: a.nom, prenom: a.prenom, service: a.service },
+          activeAffs: [],
+        });
+      }
+      if (isActiveAtDate(a.date_debut, a.date_fin, today)) {
+        personKeys.get(key)!.activeAffs.push(a);
       }
     });
     const unassignedTertiaires: UnassignedTertiaire[] = [];
-    personKeys.forEach((person, key) => {
-      const hasActive = affectationsTertiaires.some(
-        (a) =>
-          `${a.nom}||${a.prenom}||${a.service}` === key &&
-          isActiveAtDate(a.date_debut, a.date_fin, today)
-      );
-      if (!hasActive) unassignedTertiaires.push(person);
-    });
-
-    // Operationnelle: unique projects by nom_projet
-    const projectKeys = new Map<string, UnassignedOperationnelle>();
-    affectationsOperationnelles.forEach((a) => {
-      if (!projectKeys.has(a.nom_projet)) {
-        projectKeys.set(a.nom_projet, {
-          nom_projet: a.nom_projet,
-          surface_necessaire: a.surface_necessaire,
+    personKeys.forEach(({ person, activeAffs }) => {
+      if (isResourceUnassigned(activeAffs)) {
+        unassignedTertiaires.push({
+          ...person,
+          lastAffectation: activeAffs.find((a) => a.zone_id === "INCONNUE"),
         });
       }
     });
+
+    // Operationnelle: unique projects by nom_projet
+    const projectKeys = new Map<string, { project: UnassignedOperationnelle; activeAffs: AffectationOperationnelle[] }>();
+    affectationsOperationnelles.forEach((a) => {
+      if (!projectKeys.has(a.nom_projet)) {
+        projectKeys.set(a.nom_projet, {
+          project: { nom_projet: a.nom_projet, surface_necessaire: a.surface_necessaire },
+          activeAffs: [],
+        });
+      }
+      if (isActiveAtDate(a.date_debut, a.date_fin, today)) {
+        projectKeys.get(a.nom_projet)!.activeAffs.push(a);
+      }
+    });
     const unassignedOperationnelles: UnassignedOperationnelle[] = [];
-    projectKeys.forEach((project, key) => {
-      const hasActive = affectationsOperationnelles.some(
-        (a) => a.nom_projet === key && isActiveAtDate(a.date_debut, a.date_fin, today)
-      );
-      if (!hasActive) unassignedOperationnelles.push(project);
+    projectKeys.forEach(({ project, activeAffs }) => {
+      if (isResourceUnassigned(activeAffs)) {
+        unassignedOperationnelles.push({
+          ...project,
+          lastAffectation: activeAffs.find((a) => a.zone_id === "INCONNUE"),
+        });
+      }
     });
 
     return { tertiaires: unassignedTertiaires, operationnelles: unassignedOperationnelles };
@@ -130,6 +151,8 @@ const Dashboard: React.FC = () => {
       setActiveDrag({ type: "unassigned-tertiaire", unassignedTertiaire: data.resource });
     } else if (data?.type === "unassigned-operationnelle") {
       setActiveDrag({ type: "unassigned-operationnelle", unassignedOperationnelle: data.resource });
+    } else if (data?.type === "tertiaire" && data?.affectationTertiaire) {
+      setActiveDrag({ type: "tertiaire", affectationTertiaire: data.affectationTertiaire });
     } else if (data?.affectation) {
       setActiveDrag({ type: "operationnelle", affectation: data.affectation });
     }
@@ -160,6 +183,10 @@ const Dashboard: React.FC = () => {
           });
           return;
         }
+        // Delete active INCONNUE affectation if exists
+        if (resource.lastAffectation) {
+          deleteAffectationTertiaire(resource.lastAffectation.id);
+        }
         addAffectationTertiaire({
           nom: resource.nom,
           prenom: resource.prenom,
@@ -168,6 +195,14 @@ const Dashboard: React.FC = () => {
           date_debut: todayStr,
           date_fin: undefined,
         });
+        // Check capacity
+        const targetStats = getOccupationForZone(targetZone.id, today);
+        if (targetStats.occupation + 1 > targetZone.capacite_max) {
+          toast({
+            title: `⚠️ Capacité dépassée dans ${targetZone.nom_zone}`,
+            description: `${targetStats.occupation + 1} / ${targetZone.capacite_max} pers.`,
+          });
+        }
         toast({
           title: `Ressource affectée à ${targetZone.nom_zone}`,
           description: `${resource.prenom} ${resource.nom} à partir du ${format(today, "dd/MM/yyyy")}`,
@@ -210,7 +245,42 @@ const Dashboard: React.FC = () => {
         return;
       }
 
-      // --- Handle existing operationnelle affectation drag (existing logic) ---
+      // --- Handle existing tertiaire affectation drag ---
+      if (data?.type === "tertiaire") {
+        const aff = data.affectationTertiaire as AffectationTertiaire;
+        if (!aff) return;
+        if (targetZone.type !== "tertiaire") {
+          toast({ title: "Zone incompatible", description: "Une ressource tertiaire ne peut être affectée qu'à une zone tertiaire.", variant: "destructive" });
+          return;
+        }
+        if (aff.zone_id === targetZone.id) return;
+        if (!isActiveAtDate(aff.date_debut, aff.date_fin, today)) {
+          toast({ title: "Aucune affectation active à modifier", description: "Cette affectation n'est pas active à la date du jour.", variant: "destructive" });
+          return;
+        }
+        const debutDate = new Date(aff.date_debut);
+        debutDate.setHours(0, 0, 0, 0);
+        if (debutDate.getTime() === today.getTime()) {
+          updateAffectationTertiaire({ ...aff, zone_id: targetZone.id });
+        } else {
+          const yesterday = new Date(today);
+          yesterday.setDate(yesterday.getDate() - 1);
+          const yesterdayStr = format(yesterday, "yyyy-MM-dd");
+          updateAffectationTertiaire({ ...aff, date_fin: yesterdayStr });
+          addAffectationTertiaire({
+            nom: aff.nom, prenom: aff.prenom, service: aff.service,
+            zone_id: targetZone.id, date_debut: todayStr, date_fin: aff.date_fin ?? undefined,
+          });
+        }
+        const targetStats = getOccupationForZone(targetZone.id, today);
+        if (targetStats.occupation + 1 > targetZone.capacite_max) {
+          toast({ title: `⚠️ Capacité dépassée dans ${targetZone.nom_zone}`, description: `${targetStats.occupation + 1} / ${targetZone.capacite_max} pers.` });
+        }
+        toast({ title: `Ressource déplacée vers ${targetZone.nom_zone}`, description: `${aff.prenom} ${aff.nom} à partir du ${format(today, "dd/MM/yyyy")}` });
+        return;
+      }
+
+      // --- Handle existing operationnelle affectation drag ---
       const affectation = data?.affectation as AffectationOperationnelle | undefined;
       if (!affectation) return;
       if (affectation.zone_id === targetZone.id) return;
@@ -257,7 +327,7 @@ const Dashboard: React.FC = () => {
         description: `${affectation.nom_projet} à partir du ${format(today, "dd/MM/yyyy")}`,
       });
     },
-    [updateAffectationOperationnelle, addAffectationOperationnelle, addAffectationTertiaire, getOccupationForZone]
+    [updateAffectationOperationnelle, addAffectationOperationnelle, addAffectationTertiaire, updateAffectationTertiaire, deleteAffectationTertiaire, getOccupationForZone]
   );
 
   // --- Stats ---
@@ -308,12 +378,12 @@ const Dashboard: React.FC = () => {
 
   const overCapacityZoneIds = useMemo(() => {
     const ids = new Set<string>();
-    zones.filter((z) => z.type === "operationnelle").forEach((zone) => {
+    zones.forEach((zone) => {
       const s = getOccupationForZone(zone.id, dateEtat);
       if (s.occupation > s.capacite_max) ids.add(zone.id);
     });
     return ids;
-  }, [zones, dateEtat, getOccupationForZone, affectationsOperationnelles]);
+  }, [zones, dateEtat, getOccupationForZone, affectationsOperationnelles, affectationsTertiaires]);
 
   const getBatimentStats = (batiment: string) => {
     const batimentZones = zones.filter((z) => z.batiment === batiment);
@@ -441,6 +511,7 @@ const Dashboard: React.FC = () => {
                                 stats={getOccupationForZone(zone.id, dateEtat)}
                                 affectationsTertiaires={getActiveAffectationsTertiaires(zone.id)}
                                 affectationsOperationnelles={[]}
+                                isOverCapacity={overCapacityZoneIds.has(zone.id)}
                               />
                             ))}
                           </div>
@@ -485,6 +556,8 @@ const Dashboard: React.FC = () => {
       <DragOverlay dropAnimation={{ duration: 200, easing: "ease" }}>
         {activeDrag?.type === "operationnelle" ? (
           <DragOverlayContent affectation={activeDrag.affectation} />
+        ) : activeDrag?.type === "tertiaire" ? (
+          <DragOverlayContent unassignedTertiaire={activeDrag.affectationTertiaire ? { nom: activeDrag.affectationTertiaire.nom, prenom: activeDrag.affectationTertiaire.prenom, service: activeDrag.affectationTertiaire.service } : undefined} />
         ) : activeDrag?.type === "unassigned-tertiaire" ? (
           <DragOverlayContent unassignedTertiaire={activeDrag.unassignedTertiaire} />
         ) : activeDrag?.type === "unassigned-operationnelle" ? (

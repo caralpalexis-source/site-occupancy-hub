@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { Zone, OccupationStats, AffectationTertiaire, AffectationOperationnelle } from "@/types";
 import { OccupationBadge } from "./OccupationBadge";
-import { DraggableAffectation } from "./DraggableAffectation";
+import { DraggableAffectation, DraggableAffectationTertiaire } from "./DraggableAffectation";
 import { Building2, Users, Maximize, ChevronDown, AlertTriangle } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
@@ -137,24 +137,11 @@ export const DroppableZoneCard: React.FC<DroppableZoneCardProps> = ({
                       )
                     : (affectationsTertiaires as AffectationTertiaire[]).map(
                         (aff) => (
-                          <div
+                          <DraggableAffectationTertiaire
                             key={aff.id}
-                            className="p-2 bg-muted/50 rounded-lg text-sm"
-                          >
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <span className="font-medium text-foreground">
-                                  {aff.prenom} {aff.nom}
-                                </span>
-                                <p className="text-xs text-muted-foreground">
-                                  {aff.service}
-                                </p>
-                              </div>
-                              <span className="text-xs text-muted-foreground">
-                                {formatPeriod(aff.date_debut, aff.date_fin)}
-                              </span>
-                            </div>
-                          </div>
+                            affectation={aff}
+                            formatPeriod={formatPeriod}
+                          />
                         )
                       )}
                 </div>
