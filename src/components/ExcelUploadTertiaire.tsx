@@ -373,246 +373,252 @@ export const ExcelUploadTertiaire: React.FC = () => {
       </Button>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileSpreadsheet className="w-5 h-5" />
-              Import des affectations tertiaires
-            </DialogTitle>
-            <DialogDescription>Fichier : {fileName}</DialogDescription>
-          </DialogHeader>
-
-          {/* Final report */}
-          {finalReport && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-primary">
-                <CheckCircle2 className="w-6 h-6" />
-                <h3 className="text-lg font-semibold">Import terminé</h3>
+        <DialogContent className="sm:max-w-[900px] max-w-[95vw] h-[80vh] flex flex-col p-0 gap-0">
+          {/* HEADER - fixed */}
+          <div className="p-6 pb-4 border-b flex-shrink-0">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileSpreadsheet className="w-5 h-5" />
+                Import des affectations tertiaires
+              </DialogTitle>
+              <DialogDescription>Fichier : {fileName}</DialogDescription>
+            </DialogHeader>
+            {/* Fuzzy counter in header */}
+            {importSummary && !finalReport && importSummary.fuzzyRows.length > 0 && (
+              <div className="mt-3 text-sm font-medium">
+                Décisions prises : {importSummary.fuzzyRows.filter((r) => r.userConfirmed !== undefined).length} / {importSummary.fuzzyRows.length}
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-muted rounded-lg">
-                  <div className="text-2xl font-bold">{finalReport.totalImported}</div>
-                  <div className="text-sm text-muted-foreground">affectations importées</div>
-                </div>
-                <div className="p-3 bg-primary/10 rounded-lg">
-                  <div className="text-2xl font-bold text-primary">{finalReport.exactMatches}</div>
-                  <div className="text-sm text-muted-foreground">correspondances exactes</div>
-                </div>
-                <div className="p-3 bg-accent rounded-lg">
-                  <div className="text-2xl font-bold text-accent-foreground">{finalReport.fuzzyAccepted}</div>
-                  <div className="text-sm text-muted-foreground">zones proposées acceptées</div>
-                </div>
-                <div className="p-3 bg-secondary rounded-lg">
-                  <div className="text-2xl font-bold text-secondary-foreground">{finalReport.unknownZone}</div>
-                  <div className="text-sm text-muted-foreground">zones inconnues</div>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button onClick={handleClose}>Fermer</Button>
-              </DialogFooter>
-            </div>
-          )}
+            )}
+          </div>
 
-          {/* Pre-import summary */}
-          {importSummary && !finalReport && (
-            <div className="space-y-4">
-              {/* Summary stats */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="p-3 bg-muted rounded-lg text-center">
-                  <div className="text-2xl font-bold">{importSummary.totalRows}</div>
-                  <div className="text-xs text-muted-foreground">lignes</div>
+          {/* CONTENT - scrollable */}
+          <div className="flex-1 overflow-y-auto p-6">
+            {/* Final report */}
+            {finalReport && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-primary">
+                  <CheckCircle2 className="w-6 h-6" />
+                  <h3 className="text-lg font-semibold">Import terminé</h3>
                 </div>
-                <div className="p-3 bg-primary/10 rounded-lg text-center">
-                  <CheckCircle2 className="w-4 h-4 text-primary mx-auto mb-1" />
-                  <div className="text-2xl font-bold text-primary">{importSummary.validRows.length}</div>
-                  <div className="text-xs text-muted-foreground">valides</div>
-                </div>
-                <div className="p-3 bg-accent rounded-lg text-center">
-                  <HelpCircle className="w-4 h-4 text-accent-foreground mx-auto mb-1" />
-                  <div className="text-2xl font-bold text-accent-foreground">{importSummary.fuzzyRows.length}</div>
-                  <div className="text-xs text-muted-foreground">à confirmer</div>
-                </div>
-                <div className="p-3 bg-destructive/10 rounded-lg text-center">
-                  <XCircle className="w-4 h-4 text-destructive mx-auto mb-1" />
-                  <div className="text-2xl font-bold text-destructive">{importSummary.errorRows.length}</div>
-                  <div className="text-xs text-muted-foreground">erreurs</div>
-                </div>
-              </div>
-
-              {/* Duplicates warning */}
-              {importSummary.duplicateRows.length > 0 && (
-                <div className="flex items-start gap-2 p-3 bg-accent border border-border rounded-lg">
-                  <AlertTriangle className="w-5 h-5 text-accent-foreground mt-0.5 shrink-0" />
-                  <div>
-                    <div className="font-medium text-accent-foreground">
-                      {importSummary.duplicateRows.length} doublon(s) ignoré(s)
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      Ces affectations existent déjà (même personne, zone et période).
-                    </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 bg-muted rounded-lg">
+                    <div className="text-2xl font-bold">{finalReport.totalImported}</div>
+                    <div className="text-sm text-muted-foreground">affectations importées</div>
+                  </div>
+                  <div className="p-3 bg-primary/10 rounded-lg">
+                    <div className="text-2xl font-bold text-primary">{finalReport.exactMatches}</div>
+                    <div className="text-sm text-muted-foreground">correspondances exactes</div>
+                  </div>
+                  <div className="p-3 bg-accent rounded-lg">
+                    <div className="text-2xl font-bold text-accent-foreground">{finalReport.fuzzyAccepted}</div>
+                    <div className="text-sm text-muted-foreground">zones proposées acceptées</div>
+                  </div>
+                  <div className="p-3 bg-secondary rounded-lg">
+                    <div className="text-2xl font-bold text-secondary-foreground">{finalReport.unknownZone}</div>
+                    <div className="text-sm text-muted-foreground">zones inconnues</div>
                   </div>
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* Fuzzy match rows requiring confirmation */}
-              {importSummary.fuzzyRows.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="font-medium text-accent-foreground flex items-center gap-2">
-                    <HelpCircle className="w-4 h-4" />
-                    Zones à confirmer ({importSummary.fuzzyRows.length})
-                  </h4>
-                  {(() => {
-                    const pendingCount = importSummary.fuzzyRows.filter((r) => r.userConfirmed === undefined).length;
-                    return pendingCount > 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        {pendingCount} correspondance{pendingCount > 1 ? "s" : ""} restante{pendingCount > 1 ? "s" : ""} à valider
-                      </p>
-                    ) : (
-                      <p className="text-sm text-primary">✓ Toutes les correspondances ont été traitées</p>
-                    );
-                  })()}
-                  <div className="max-h-[250px] overflow-y-auto border rounded-lg">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-12">Ligne</TableHead>
-                          <TableHead>Personne</TableHead>
-                          <TableHead>Zone Excel</TableHead>
-                          <TableHead>Zone proposée</TableHead>
-                          <TableHead className="w-24 text-center">Action</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {importSummary.fuzzyRows.map((row) => (
-                          <TableRow key={row.rowNumber}>
-                            <TableCell className="font-mono text-sm">{row.rowNumber}</TableCell>
-                            <TableCell className="text-sm">{row.prenom} {row.nom}</TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="font-mono text-xs">
-                                {row.zoneName}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="secondary" className="text-xs">
-                                {row.suggestedZoneName}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center justify-center gap-1">
-                                {row.userConfirmed === undefined ? (
-                                  <>
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      className="h-7 w-7 text-primary hover:text-primary hover:bg-primary/10"
-                                      onClick={() => handleFuzzyDecision(row.rowNumber, true)}
-                                      title="Accepter la zone proposée"
-                                    >
-                                      <Check className="w-4 h-4" />
-                                    </Button>
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                      onClick={() => handleFuzzyDecision(row.rowNumber, false)}
-                                      title="Refuser → zone inconnue"
-                                    >
-                                      <X className="w-4 h-4" />
-                                    </Button>
-                                  </>
-                                ) : row.userConfirmed ? (
-                                  <Badge className="bg-primary/10 text-primary border-0 text-xs cursor-pointer" onClick={() => handleFuzzyDecision(row.rowNumber, false)}>
-                                    ✓ Accepté
-                                  </Badge>
+            {/* Pre-import summary */}
+            {importSummary && !finalReport && (
+              <div className="space-y-4">
+                {/* Summary stats */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="p-3 bg-muted rounded-lg text-center">
+                    <div className="text-2xl font-bold">{importSummary.totalRows}</div>
+                    <div className="text-xs text-muted-foreground">lignes</div>
+                  </div>
+                  <div className="p-3 bg-primary/10 rounded-lg text-center">
+                    <CheckCircle2 className="w-4 h-4 text-primary mx-auto mb-1" />
+                    <div className="text-2xl font-bold text-primary">{importSummary.validRows.length}</div>
+                    <div className="text-xs text-muted-foreground">valides</div>
+                  </div>
+                  <div className="p-3 bg-accent rounded-lg text-center">
+                    <HelpCircle className="w-4 h-4 text-accent-foreground mx-auto mb-1" />
+                    <div className="text-2xl font-bold text-accent-foreground">{importSummary.fuzzyRows.length}</div>
+                    <div className="text-xs text-muted-foreground">à confirmer</div>
+                  </div>
+                  <div className="p-3 bg-destructive/10 rounded-lg text-center">
+                    <XCircle className="w-4 h-4 text-destructive mx-auto mb-1" />
+                    <div className="text-2xl font-bold text-destructive">{importSummary.errorRows.length}</div>
+                    <div className="text-xs text-muted-foreground">erreurs</div>
+                  </div>
+                </div>
+
+                {/* Duplicates warning */}
+                {importSummary.duplicateRows.length > 0 && (
+                  <div className="flex items-start gap-2 p-3 bg-accent border border-border rounded-lg">
+                    <AlertTriangle className="w-5 h-5 text-accent-foreground mt-0.5 shrink-0" />
+                    <div>
+                      <div className="font-medium text-accent-foreground">
+                        {importSummary.duplicateRows.length} doublon(s) ignoré(s)
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Ces affectations existent déjà (même personne, zone et période).
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Fuzzy match rows requiring confirmation */}
+                {importSummary.fuzzyRows.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="font-medium text-accent-foreground flex items-center gap-2">
+                      <HelpCircle className="w-4 h-4" />
+                      Zones à confirmer ({importSummary.fuzzyRows.length})
+                    </h4>
+                    <div className="border rounded-lg">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-12">Ligne</TableHead>
+                            <TableHead>Personne</TableHead>
+                            <TableHead>Zone Excel</TableHead>
+                            <TableHead>Zone proposée</TableHead>
+                            <TableHead className="w-24 text-center">Action</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {importSummary.fuzzyRows.map((row) => (
+                            <TableRow key={row.rowNumber}>
+                              <TableCell className="font-mono text-sm">{row.rowNumber}</TableCell>
+                              <TableCell className="text-sm">{row.prenom} {row.nom}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="font-mono text-xs">
+                                  {row.zoneName}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="secondary" className="text-xs">
+                                  {row.suggestedZoneName}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center justify-center gap-1">
+                                  {row.userConfirmed === undefined ? (
+                                    <>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-7 w-7 text-primary hover:text-primary hover:bg-primary/10"
+                                        onClick={() => handleFuzzyDecision(row.rowNumber, true)}
+                                        title="Accepter la zone proposée"
+                                      >
+                                        <Check className="w-4 h-4" />
+                                      </Button>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                        onClick={() => handleFuzzyDecision(row.rowNumber, false)}
+                                        title="Refuser → zone inconnue"
+                                      >
+                                        <X className="w-4 h-4" />
+                                      </Button>
+                                    </>
+                                  ) : row.userConfirmed ? (
+                                    <Badge className="bg-primary/10 text-primary border-0 text-xs cursor-pointer" onClick={() => handleFuzzyDecision(row.rowNumber, false)}>
+                                      ✓ Accepté
+                                    </Badge>
+                                  ) : (
+                                    <Badge className="bg-secondary text-secondary-foreground border-0 text-xs cursor-pointer" onClick={() => handleFuzzyDecision(row.rowNumber, true)}>
+                                      Zone inconnue
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Error details */}
+                {importSummary.errorRows.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="font-medium text-destructive flex items-center gap-2">
+                      <XCircle className="w-4 h-4" />
+                      Lignes en erreur ({importSummary.errorRows.length})
+                    </h4>
+                    <div className="border rounded-lg">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-12">Ligne</TableHead>
+                            <TableHead>Données</TableHead>
+                            <TableHead>Erreur</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {importSummary.errorRows.map((row) => (
+                            <TableRow key={row.rowNumber}>
+                              <TableCell className="font-mono text-sm">{row.rowNumber}</TableCell>
+                              <TableCell className="text-sm">
+                                {row.prenom} {row.nom} - {row.zoneName || "(vide)"}
+                              </TableCell>
+                              <TableCell className="text-destructive text-sm">{row.error}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Valid rows preview */}
+                {importSummary.validRows.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="font-medium text-primary flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4" />
+                      Affectations prêtes ({importSummary.validRows.length})
+                    </h4>
+                    <div className="border rounded-lg">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Nom</TableHead>
+                            <TableHead>Service</TableHead>
+                            <TableHead>Zone</TableHead>
+                            <TableHead>Période</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {importSummary.validRows.map((row) => (
+                            <TableRow key={row.rowNumber}>
+                              <TableCell>{row.prenom} {row.nom}</TableCell>
+                              <TableCell>{row.service}</TableCell>
+                              <TableCell>
+                                {!row.zoneId ? (
+                                  <Badge variant="outline" className="text-xs">Zone inconnue</Badge>
                                 ) : (
-                                  <Badge className="bg-secondary text-secondary-foreground border-0 text-xs cursor-pointer" onClick={() => handleFuzzyDecision(row.rowNumber, true)}>
-                                    Zone inconnue
-                                  </Badge>
+                                  row.zoneName
                                 )}
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {row.date_debut}
+                                {row.date_fin && ` → ${row.date_fin}`}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
+            )}
+          </div>
 
-              {/* Error details */}
-              {importSummary.errorRows.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="font-medium text-destructive flex items-center gap-2">
-                    <XCircle className="w-4 h-4" />
-                    Lignes en erreur ({importSummary.errorRows.length})
-                  </h4>
-                  <ScrollArea className="max-h-[150px] border rounded-lg">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-12">Ligne</TableHead>
-                          <TableHead>Données</TableHead>
-                          <TableHead>Erreur</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {importSummary.errorRows.map((row) => (
-                          <TableRow key={row.rowNumber}>
-                            <TableCell className="font-mono text-sm">{row.rowNumber}</TableCell>
-                            <TableCell className="text-sm">
-                              {row.prenom} {row.nom} - {row.zoneName || "(vide)"}
-                            </TableCell>
-                            <TableCell className="text-destructive text-sm">{row.error}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </ScrollArea>
-                </div>
-              )}
-
-              {/* Valid rows preview */}
-              {importSummary.validRows.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="font-medium text-primary flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4" />
-                    Affectations prêtes ({importSummary.validRows.length})
-                  </h4>
-                  <ScrollArea className="max-h-[200px] border rounded-lg">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Nom</TableHead>
-                          <TableHead>Service</TableHead>
-                          <TableHead>Zone</TableHead>
-                          <TableHead>Période</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {importSummary.validRows.map((row) => (
-                          <TableRow key={row.rowNumber}>
-                            <TableCell>{row.prenom} {row.nom}</TableCell>
-                            <TableCell>{row.service}</TableCell>
-                            <TableCell>
-                            {!row.zoneId ? (
-                                <Badge variant="outline" className="text-xs">Zone inconnue</Badge>
-                              ) : (
-                                row.zoneName
-                              )}
-                            </TableCell>
-                            <TableCell className="text-sm">
-                              {row.date_debut}
-                              {row.date_fin && ` → ${row.date_fin}`}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </ScrollArea>
-                </div>
-              )}
-
-              <DialogFooter className="gap-2 sm:gap-0">
+          {/* FOOTER - fixed */}
+          <div className="p-4 border-t flex-shrink-0 flex justify-end gap-2">
+            {finalReport ? (
+              <Button onClick={handleClose}>Fermer</Button>
+            ) : importSummary ? (
+              <>
                 <Button variant="outline" onClick={handleClose}>
                   Annuler
                 </Button>
@@ -622,15 +628,10 @@ export const ExcelUploadTertiaire: React.FC = () => {
                 >
                   <CheckCircle2 className="w-4 h-4 mr-2" />
                   Confirmer l'import ({importableCount})
-                  {!allFuzzyDecided && importSummary.fuzzyRows.length > 0 && (
-                    <span className="ml-1 text-xs opacity-70">
-                      ({importSummary.fuzzyRows.filter((r) => r.userConfirmed === undefined).length} à confirmer)
-                    </span>
-                  )}
                 </Button>
-              </DialogFooter>
-            </div>
-          )}
+              </>
+            ) : null}
+          </div>
         </DialogContent>
       </Dialog>
     </>
