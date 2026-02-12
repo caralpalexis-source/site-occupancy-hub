@@ -13,13 +13,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Table,
   TableBody,
   TableCell,
@@ -27,6 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ZoneCombobox } from "@/components/ZoneCombobox";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -488,21 +482,11 @@ const Affectations: React.FC = () => {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="zone">Zone</Label>
-                      <Select
+                      <ZoneCombobox
+                        zones={zonesTertiaires}
                         value={tertiaireForm.zone_id}
-                        onValueChange={(v) => setTertiaireForm({ ...tertiaireForm, zone_id: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner une zone" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {zonesTertiaires.map((zone) => (
-                            <SelectItem key={zone.id} value={zone.id}>
-                              {zone.batiment} - {zone.nom_zone}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        onChange={(v) => setTertiaireForm({ ...tertiaireForm, zone_id: v })}
+                      />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
@@ -654,21 +638,12 @@ const Affectations: React.FC = () => {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="zone_op">Zone</Label>
-                      <Select
+                      <ZoneCombobox
+                        zones={zonesOperationnelles}
                         value={operationnelleForm.zone_id}
-                        onValueChange={(v) => setOperationnelleForm({ ...operationnelleForm, zone_id: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner une zone" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {zonesOperationnelles.map((zone) => (
-                            <SelectItem key={zone.id} value={zone.id}>
-                              {zone.batiment} - {zone.nom_zone} ({zone.capacite_max} m²)
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        onChange={(v) => setOperationnelleForm({ ...operationnelleForm, zone_id: v })}
+                        formatLabel={(z) => `${z.batiment} - ${z.nom_zone} (${z.capacite_max} m²)`}
+                      />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
