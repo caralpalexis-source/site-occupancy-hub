@@ -74,13 +74,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (stored) {
       try {
         const data: AppData = JSON.parse(stored);
-        setZones(data.zones || []);
-        // Clean up any "INCONNUE" zone_id values
+        // Remove any zone named "INCONNUE"
+        const cleanedZones = (data.zones || []).filter(
+          (z) => z.nom_zone.toLowerCase() !== "inconnue"
+        );
+        setZones(cleanedZones);
+        // Clean up any "INCONNUE" zone_id values and remove references to deleted INCONNUE zones
+        const inconnueZoneIds = new Set(
+          (data.zones || []).filter((z) => z.nom_zone.toLowerCase() === "inconnue").map((z) => z.id)
+        );
         setAffectationsTertiaires(
-          (data.affectationsTertiaires || []).map((a) => ({ ...a, zone_id: sanitizeZoneId(a.zone_id) }))
+          (data.affectationsTertiaires || []).map((a) => ({
+            ...a,
+            zone_id: inconnueZoneIds.has(a.zone_id || "") ? undefined : sanitizeZoneId(a.zone_id),
+          }))
         );
         setAffectationsOperationnelles(
-          (data.affectationsOperationnelles || []).map((a) => ({ ...a, zone_id: sanitizeZoneId(a.zone_id) }))
+          (data.affectationsOperationnelles || []).map((a) => ({
+            ...a,
+            zone_id: inconnueZoneIds.has(a.zone_id || "") ? undefined : sanitizeZoneId(a.zone_id),
+          }))
         );
       } catch (e) {
         console.error("Error parsing stored data:", e);
