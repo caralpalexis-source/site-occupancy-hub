@@ -14,7 +14,7 @@ export interface AffectationTertiaire {
   nom: string;
   prenom: string;
   service: string;
-  zone_id: string;
+  zone_id?: string;
   date_debut: string;
   date_fin?: string;
 }
@@ -23,7 +23,7 @@ export interface AffectationOperationnelle {
   id: string;
   nom_projet: string;
   surface_necessaire: number;
-  zone_id: string;
+  zone_id?: string;
   date_debut: string;
   date_fin?: string;
 }

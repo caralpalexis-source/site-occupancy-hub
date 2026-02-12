@@ -62,6 +62,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [dateEtat, setDateEtat] = useState<Date>(new Date());
   const [buildingPlans, setBuildingPlans] = useState<Record<string, string>>({});
 
+  // Sanitize zone_id: convert "INCONNUE" to undefined
+  const sanitizeZoneId = (zoneId?: string): string | undefined => {
+    if (!zoneId || zoneId === "INCONNUE") return undefined;
+    return zoneId;
+  };
+
   // Load from localStorage on mount
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -69,8 +75,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const data: AppData = JSON.parse(stored);
         setZones(data.zones || []);
-        setAffectationsTertiaires(data.affectationsTertiaires || []);
-        setAffectationsOperationnelles(data.affectationsOperationnelles || []);
+        // Clean up any "INCONNUE" zone_id values
+        setAffectationsTertiaires(
+          (data.affectationsTertiaires || []).map((a) => ({ ...a, zone_id: sanitizeZoneId(a.zone_id) }))
+        );
+        setAffectationsOperationnelles(
+          (data.affectationsOperationnelles || []).map((a) => ({ ...a, zone_id: sanitizeZoneId(a.zone_id) }))
+        );
       } catch (e) {
         console.error("Error parsing stored data:", e);
       }
@@ -203,8 +214,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const importData = useCallback((data: AppData) => {
     if (data.zones) setZones(data.zones);
-    if (data.affectationsTertiaires) setAffectationsTertiaires(data.affectationsTertiaires);
-    if (data.affectationsOperationnelles) setAffectationsOperationnelles(data.affectationsOperationnelles);
+    if (data.affectationsTertiaires) setAffectationsTertiaires(
+      data.affectationsTertiaires.map((a) => ({ ...a, zone_id: sanitizeZoneId(a.zone_id) }))
+    );
+    if (data.affectationsOperationnelles) setAffectationsOperationnelles(
+      data.affectationsOperationnelles.map((a) => ({ ...a, zone_id: sanitizeZoneId(a.zone_id) }))
+    );
   }, []);
 
   return (

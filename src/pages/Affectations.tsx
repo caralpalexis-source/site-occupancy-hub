@@ -119,7 +119,8 @@ const Affectations: React.FC = () => {
     date_fin: "",
   });
 
-  const getZoneName = (zoneId: string) => {
+  const getZoneName = (zoneId?: string) => {
+    if (!zoneId) return "Zone inconnue";
     const zone = zones.find((z) => z.id === zoneId);
     return zone ? `${zone.batiment} - ${zone.nom_zone}` : "Zone inconnue";
   };

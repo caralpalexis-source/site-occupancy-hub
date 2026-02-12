@@ -210,7 +210,7 @@ export const ExcelUploadTertiaire: React.FC = () => {
         } else if (!date_debut) {
           parsedRow.error = "Date de début invalide ou manquante";
         } else {
-          // Zone resolution: exact → fuzzy → INCONNUE
+          // Zone resolution: exact → fuzzy → NULL (zone inconnue)
           if (zoneName) {
             const exactZone = findZoneExact(zoneName);
             if (exactZone) {
@@ -226,13 +226,13 @@ export const ExcelUploadTertiaire: React.FC = () => {
                 // Default: not yet decided
                 parsedRow.userConfirmed = undefined;
               } else {
-                // No match at all → INCONNUE
-                parsedRow.zoneId = "INCONNUE";
+              // No match at all → zone inconnue (NULL)
+                parsedRow.zoneId = undefined;
               }
             }
           } else {
-            // No zone specified → INCONNUE
-            parsedRow.zoneId = "INCONNUE";
+            // No zone specified → zone inconnue (NULL)
+            parsedRow.zoneId = undefined;
           }
         }
 
@@ -295,12 +295,12 @@ export const ExcelUploadTertiaire: React.FC = () => {
         nom: row.nom,
         prenom: row.prenom,
         service: row.service,
-        zone_id: row.zoneId || "INCONNUE",
+        zone_id: row.zoneId || undefined,
         date_debut: row.date_debut,
         date_fin: row.date_fin,
       });
       importedCount++;
-      if (row.zoneId === "INCONNUE") {
+      if (!row.zoneId) {
         unknownZone++;
       } else {
         exactMatches++;
@@ -322,12 +322,12 @@ export const ExcelUploadTertiaire: React.FC = () => {
         importedCount++;
         fuzzyAccepted++;
       } else if (row.userConfirmed === false) {
-        // User refused → INCONNUE
+        // User refused → zone inconnue (NULL)
         addAffectationTertiaire({
           nom: row.nom,
           prenom: row.prenom,
           service: row.service,
-          zone_id: "INCONNUE",
+          zone_id: undefined,
           date_debut: row.date_debut,
           date_fin: row.date_fin,
         });
@@ -584,7 +584,7 @@ export const ExcelUploadTertiaire: React.FC = () => {
                             <TableCell>{row.prenom} {row.nom}</TableCell>
                             <TableCell>{row.service}</TableCell>
                             <TableCell>
-                              {row.zoneId === "INCONNUE" ? (
+                            {!row.zoneId ? (
                                 <Badge variant="outline" className="text-xs">Zone inconnue</Badge>
                               ) : (
                                 row.zoneName
