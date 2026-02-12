@@ -1,4 +1,7 @@
 import React, { useState, useRef } from "react";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
+import * as XLSX from "xlsx";
 import { useApp } from "@/context/AppContext";
 import { AppData } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -16,6 +19,15 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Calendar } from "@/components/ui/calendar";
 import { Download, Upload, FileJson, FileSpreadsheet, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
@@ -25,6 +37,73 @@ const DataManagement: React.FC = () => {
   const [importSuccess, setImportSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const excelInputRef = useRef<HTMLInputElement>(null);
+  const [excelExportOpen, setExcelExportOpen] = useState(false);
+  const [excelExportDate, setExcelExportDate] = useState<Date>(new Date());
+
+  const isActiveAtDate = (dateDebut: string, dateFin: string | undefined, date: Date): boolean => {
+    const debut = new Date(dateDebut);
+    debut.setHours(0, 0, 0, 0);
+    const checkDate = new Date(date);
+    checkDate.setHours(0, 0, 0, 0);
+    if (debut > checkDate) return false;
+    if (!dateFin) return true;
+    const fin = new Date(dateFin);
+    fin.setHours(23, 59, 59, 999);
+    return fin >= checkDate;
+  };
+
+  const handleExportExcel = () => {
+    const date = excelExportDate;
+    const rows: Record<string, string>[] = [];
+
+    // Tertiaires actives à la date
+    affectationsTertiaires
+      .filter((a) => isActiveAtDate(a.date_debut, a.date_fin, date))
+      .forEach((a) => {
+        const zone = zones.find((z) => z.id === a.zone_id);
+        const periode = a.date_fin
+          ? `${a.date_debut} -> ${a.date_fin}`
+          : `${a.date_debut} -> `;
+        rows.push({
+          "Type ressource": "Tertiaire",
+          "Nom": a.nom,
+          "Prenom": a.prenom,
+          "Surface": "",
+          "Zone": zone ? zone.nom_zone : a.zone_id,
+          "Periode": periode,
+        });
+      });
+
+    // Opérationnelles actives à la date
+    affectationsOperationnelles
+      .filter((a) => isActiveAtDate(a.date_debut, a.date_fin, date))
+      .forEach((a) => {
+        const zone = zones.find((z) => z.id === a.zone_id);
+        const periode = a.date_fin
+          ? `${a.date_debut} -> ${a.date_fin}`
+          : `${a.date_debut} -> `;
+        rows.push({
+          "Type ressource": "Opérationnelle",
+          "Nom": a.nom_projet,
+          "Prenom": "",
+          "Surface": String(a.surface_necessaire),
+          "Zone": zone ? zone.nom_zone : a.zone_id,
+          "Periode": periode,
+        });
+      });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Affectations");
+    const dateStr = format(date, "yyyy-MM-dd");
+    XLSX.writeFile(wb, `export_affectations_${dateStr}.xls`, { bookType: "xls" });
+
+    setExcelExportOpen(false);
+    toast({
+      title: "Export Excel réussi",
+      description: `${rows.length} affectations exportées au ${format(date, "PPP", { locale: fr })}.`,
+    });
+  };
 
   const handleExportJSON = () => {
     const data = exportData();
@@ -180,12 +259,49 @@ const DataManagement: React.FC = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={handleExportJSON} className="w-full">
-              <FileJson className="w-4 h-4 mr-2" />
-              Exporter en JSON
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={handleExportJSON} className="flex-1">
+                <FileJson className="w-4 h-4 mr-2" />
+                Exporter en JSON
+              </Button>
+              <Button onClick={() => { setExcelExportDate(new Date()); setExcelExportOpen(true); }} variant="outline" className="flex-1">
+                <FileSpreadsheet className="w-4 h-4 mr-2" />
+                Export Excel
+              </Button>
+            </div>
           </CardContent>
         </Card>
+
+        {/* Excel Export Modal */}
+        <Dialog open={excelExportOpen} onOpenChange={setExcelExportOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Export Excel des affectations</DialogTitle>
+              <DialogDescription>
+                Sélectionnez la date d'état pour l'export
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-center py-4">
+              <Calendar
+                mode="single"
+                selected={excelExportDate}
+                onSelect={(d) => d && setExcelExportDate(d)}
+                locale={fr}
+                captionLayout="dropdown-buttons"
+                fromYear={2000}
+                toYear={2100}
+              />
+            </div>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setExcelExportOpen(false)}>
+                Annuler
+              </Button>
+              <Button onClick={handleExportExcel}>
+                Générer l'export
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Import Section */}
         <Card>
