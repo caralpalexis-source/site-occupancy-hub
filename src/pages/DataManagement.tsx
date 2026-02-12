@@ -69,7 +69,7 @@ const DataManagement: React.FC = () => {
           "Nom": a.nom,
           "Prenom": a.prenom,
           "Surface": "",
-          "Zone": zone ? zone.nom_zone : a.zone_id,
+          "Zone": zone ? zone.nom_zone : "Zone inconnue",
           "Periode": periode,
         });
       });
@@ -87,7 +87,7 @@ const DataManagement: React.FC = () => {
           "Nom": a.nom_projet,
           "Prenom": "",
           "Surface": String(a.surface_necessaire),
-          "Zone": zone ? zone.nom_zone : a.zone_id,
+          "Zone": zone ? zone.nom_zone : "Zone inconnue",
           "Periode": periode,
         });
       });
@@ -142,14 +142,14 @@ const DataManagement: React.FC = () => {
 
     // Validate affectations tertiaires
     for (const aff of d.affectationsTertiaires) {
-      if (!aff.id || !aff.nom || !aff.prenom || !aff.service || !aff.zone_id || !aff.date_debut) {
+      if (!aff.id || !aff.nom || !aff.prenom || !aff.service || !aff.date_debut) {
         return false;
       }
     }
 
     // Validate affectations operationnelles
     for (const aff of d.affectationsOperationnelles) {
-      if (!aff.id || !aff.nom_projet || aff.surface_necessaire === undefined || !aff.zone_id || !aff.date_debut) {
+      if (!aff.id || !aff.nom_projet || aff.surface_necessaire === undefined || !aff.date_debut) {
         return false;
       }
     }
