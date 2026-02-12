@@ -461,7 +461,17 @@ export const ExcelUploadTertiaire: React.FC = () => {
                     <HelpCircle className="w-4 h-4" />
                     Zones à confirmer ({importSummary.fuzzyRows.length})
                   </h4>
-                  <ScrollArea className="max-h-[200px] border rounded-lg">
+                  {(() => {
+                    const pendingCount = importSummary.fuzzyRows.filter((r) => r.userConfirmed === undefined).length;
+                    return pendingCount > 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        {pendingCount} correspondance{pendingCount > 1 ? "s" : ""} restante{pendingCount > 1 ? "s" : ""} à valider
+                      </p>
+                    ) : (
+                      <p className="text-sm text-primary">✓ Toutes les correspondances ont été traitées</p>
+                    );
+                  })()}
+                  <div className="max-h-[250px] overflow-y-auto border rounded-lg">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -525,7 +535,7 @@ export const ExcelUploadTertiaire: React.FC = () => {
                         ))}
                       </TableBody>
                     </Table>
-                  </ScrollArea>
+                  </div>
                 </div>
               )}
 
