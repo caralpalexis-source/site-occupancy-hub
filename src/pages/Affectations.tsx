@@ -285,7 +285,7 @@ const Affectations: React.FC = () => {
       nom: tertiaireForm.nom,
       prenom: tertiaireForm.prenom,
       service: tertiaireForm.service,
-      zone_id: tertiaireForm.zone_id,
+      zone_id: tertiaireForm.zone_id || undefined,
       date_debut: tertiaireForm.date_debut,
       date_fin: tertiaireForm.date_fin || undefined,
     };
@@ -332,7 +332,7 @@ const Affectations: React.FC = () => {
     const data = {
       nom_projet: operationnelleForm.nom_projet,
       surface_necessaire: parseFloat(operationnelleForm.surface_necessaire) || 0,
-      zone_id: operationnelleForm.zone_id,
+      zone_id: operationnelleForm.zone_id || undefined,
       date_debut: operationnelleForm.date_debut,
       date_fin: operationnelleForm.date_fin || undefined,
     };
