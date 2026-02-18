@@ -185,13 +185,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       let occupation = 0;
 
       if (zone.type === "tertiaire") {
-        occupation = affectationsTertiaires.filter(
+        // Deduplicate by nom+prenom
+        const active = affectationsTertiaires.filter(
           (a) => a.zone_id === zoneId && isActiveAtDate(a.date_debut, a.date_fin, date)
-        ).length;
+        );
+        const unique = new Set(active.map((a) => `${a.nom.trim().toLowerCase()}|${a.prenom.trim().toLowerCase()}`));
+        occupation = unique.size;
       } else {
-        occupation = affectationsOperationnelles
-          .filter((a) => a.zone_id === zoneId && isActiveAtDate(a.date_debut, a.date_fin, date))
-          .reduce((sum, a) => sum + a.surface_necessaire, 0);
+        // Deduplicate by nom_projet, take max surface per project
+        const active = affectationsOperationnelles.filter(
+          (a) => a.zone_id === zoneId && isActiveAtDate(a.date_debut, a.date_fin, date)
+        );
+        const byProject = new Map<string, number>();
+        active.forEach((a) => {
+          const key = a.nom_projet.trim().toLowerCase();
+          const existing = byProject.get(key) || 0;
+          byProject.set(key, Math.max(existing, a.surface_necessaire));
+        });
+        byProject.forEach((v) => (occupation += v));
       }
 
       const taux = zone.capacite_max > 0 ? (occupation / zone.capacite_max) * 100 : 0;

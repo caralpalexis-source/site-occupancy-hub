@@ -37,13 +37,22 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Plus, Pencil, Trash2, Users, Maximize, Calendar, Search, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, Maximize, Calendar, Search, ChevronDown, ChevronRight, AlertTriangle } from "lucide-react";
 import { ServicePieChart } from "@/components/ServicePieChart";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { SortSelect, SortOption } from "@/components/SortSelect";
 import { FormDatePicker } from "@/components/FormDatePicker";
 import { ExcelUploadTertiaire } from "@/components/ExcelUploadTertiaire";
+import { useDoubleAffectations, useDoubleAffectationIds } from "@/hooks/useDoubleAffectations";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 type SortTertiaire = "personne" | "service" | "zone" | "periode_asc" | "periode_desc";
 type SortOperationnelle = "projet" | "surface_asc" | "surface_desc" | "zone" | "periode_asc" | "periode_desc";
@@ -81,6 +90,10 @@ const Affectations: React.FC = () => {
 
   const zonesTertiaires = zones.filter((z) => z.type === "tertiaire");
   const zonesOperationnelles = zones.filter((z) => z.type === "operationnelle");
+
+  const doubles = useDoubleAffectations(affectationsTertiaires, affectationsOperationnelles, dateEtat);
+  const totalDoubles = doubles.totalTertiaires + doubles.totalOperationnelles;
+  const { tertiaireIds: doubleTertiaireIds, operationnelleIds: doubleOpIds } = useDoubleAffectationIds(affectationsTertiaires, affectationsOperationnelles, dateEtat);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -346,10 +359,26 @@ const Affectations: React.FC = () => {
   };
 
   // Render tertiaire row
-  const renderTertiaireRow = (aff: AffectationTertiaire) => (
-    <TableRow key={aff.id}>
+  const renderTertiaireRow = (aff: AffectationTertiaire) => {
+    const isDouble = doubleTertiaireIds.has(aff.id);
+    return (
+    <TableRow key={aff.id} className={cn(isDouble && "bg-destructive/5")}>
       <TableCell className="font-medium">
-        {aff.prenom} {aff.nom}
+        <div className="flex items-center gap-1.5">
+          {isDouble && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Cette ressource a plusieurs affectations actives à la date sélectionnée</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          {aff.prenom} {aff.nom}
+        </div>
       </TableCell>
       <TableCell>{getZoneName(aff.zone_id)}</TableCell>
       <TableCell>
@@ -391,7 +420,8 @@ const Affectations: React.FC = () => {
         </div>
       </TableCell>
     </TableRow>
-  );
+    );
+  };
 
   return (
     <div className="p-8">
@@ -401,6 +431,27 @@ const Affectations: React.FC = () => {
           Gérez les affectations de personnes et projets aux zones
         </p>
       </div>
+
+      {/* Double affectation warning */}
+      {totalDoubles > 0 && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Double affectation détectée</AlertTitle>
+          <AlertDescription>
+            ⚠️ {totalDoubles} ressource{totalDoubles > 1 ? "s" : ""} possède{totalDoubles > 1 ? "nt" : ""} plusieurs affectations actives à la date sélectionnée.
+            {doubles.totalTertiaires > 0 && (
+              <span className="block text-xs mt-1">
+                Tertiaire : {doubles.tertiaires.map((d) => `${d.prenom} ${d.nom} (${d.count}×)`).join(", ")}
+              </span>
+            )}
+            {doubles.totalOperationnelles > 0 && (
+              <span className="block text-xs mt-1">
+                Opérationnel : {doubles.operationnelles.map((d) => `${d.nom_projet} (${d.count}×)`).join(", ")}
+              </span>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Search field */}
       <div className="mb-6">
@@ -721,9 +772,27 @@ const Affectations: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedAffectationsOperationnelles.map((aff) => (
-                    <TableRow key={aff.id}>
-                      <TableCell className="font-medium">{aff.nom_projet}</TableCell>
+                  {sortedAffectationsOperationnelles.map((aff) => {
+                    const isDouble = doubleOpIds.has(aff.id);
+                    return (
+                    <TableRow key={aff.id} className={cn(isDouble && "bg-destructive/5")}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-1.5">
+                          {isDouble && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Ce projet a plusieurs affectations actives à la date sélectionnée</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                          {aff.nom_projet}
+                        </div>
+                      </TableCell>
                       <TableCell>{aff.surface_necessaire} m²</TableCell>
                       <TableCell>{getZoneName(aff.zone_id)}</TableCell>
                       <TableCell>
@@ -765,7 +834,8 @@ const Affectations: React.FC = () => {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

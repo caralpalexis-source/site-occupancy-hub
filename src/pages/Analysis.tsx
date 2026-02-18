@@ -138,18 +138,27 @@ const Analysis: React.FC = () => {
     return fin >= checkDate;
   };
 
-  // Calculate occupation for a zone at a specific date
+  // Calculate occupation for a zone at a specific date (deduplicated)
   const getOccupationAtDate = (zone: Zone, date: Date): number => {
     if (zone.type === "tertiaire") {
-      return affectationsTertiaires.filter(
+      const active = affectationsTertiaires.filter(
         (a) => a.zone_id === zone.id && isActiveAtDate(a.date_debut, a.date_fin, date)
-      ).length;
+      );
+      const unique = new Set(active.map((a) => `${a.nom.trim().toLowerCase()}|${a.prenom.trim().toLowerCase()}`));
+      return unique.size;
     } else {
-      return affectationsOperationnelles
-        .filter(
-          (a) => a.zone_id === zone.id && isActiveAtDate(a.date_debut, a.date_fin, date)
-        )
-        .reduce((sum, a) => sum + a.surface_necessaire, 0);
+      const active = affectationsOperationnelles.filter(
+        (a) => a.zone_id === zone.id && isActiveAtDate(a.date_debut, a.date_fin, date)
+      );
+      const byProject = new Map<string, number>();
+      active.forEach((a) => {
+        const key = a.nom_projet.trim().toLowerCase();
+        const existing = byProject.get(key) || 0;
+        byProject.set(key, Math.max(existing, a.surface_necessaire));
+      });
+      let total = 0;
+      byProject.forEach((v) => (total += v));
+      return total;
     }
   };
 
