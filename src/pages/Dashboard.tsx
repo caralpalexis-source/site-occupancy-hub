@@ -7,7 +7,7 @@ import { DragOverlayContent } from "@/components/DragOverlayContent";
 import { ZoneTypeFilter, ZoneFilterType } from "@/components/ZoneTypeFilter";
 import { BuildingSummary } from "@/components/BuildingSummary";
 import { BuildingPlanUpload } from "@/components/BuildingPlanUpload";
-import { Building2, Users, Maximize, TrendingUp, ChevronDown } from "lucide-react";
+import { Building2, Users, Maximize, TrendingUp, ChevronDown, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
@@ -27,6 +27,8 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { AffectationOperationnelle, AffectationTertiaire } from "@/types";
+import { useDoubleAffectations } from "@/hooks/useDoubleAffectations";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 interface ActiveDragState {
   type: "operationnelle" | "tertiaire";
@@ -55,6 +57,8 @@ const Dashboard: React.FC = () => {
   const [openBatiments, setOpenBatiments] = useState<Set<string>>(new Set());
   const [activeDrag, setActiveDrag] = useState<ActiveDragState | null>(null);
 
+  const doubles = useDoubleAffectations(affectationsTertiaires, affectationsOperationnelles, dateEtat);
+  const totalDoubles = doubles.totalTertiaires + doubles.totalOperationnelles;
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
@@ -312,6 +316,27 @@ const Dashboard: React.FC = () => {
           <StatCard title="Occupation opérationnelle" value={`${stats.totalSurface} / ${stats.capaciteSurface}`} subtitle="m² utilisés" icon={Maximize} variant={stats.tauxOperationnel > 80 ? "warning" : "success"} />
           <StatCard title="Taux moyen" value={`${Math.round((stats.tauxTertiaire + stats.tauxOperationnel) / 2)}%`} subtitle="d'occupation globale" icon={TrendingUp} />
         </div>
+
+        {/* Double affectation warning */}
+        {totalDoubles > 0 && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Double affectation détectée</AlertTitle>
+            <AlertDescription>
+              ⚠️ {totalDoubles} ressource{totalDoubles > 1 ? "s" : ""} possède{totalDoubles > 1 ? "nt" : ""} plusieurs affectations actives à la date sélectionnée.
+              {doubles.totalTertiaires > 0 && (
+                <span className="block text-xs mt-1">
+                  Tertiaire : {doubles.tertiaires.map((d) => `${d.prenom} ${d.nom} (${d.count}×)`).join(", ")}
+                </span>
+              )}
+              {doubles.totalOperationnelles > 0 && (
+                <span className="block text-xs mt-1">
+                  Opérationnel : {doubles.operationnelles.map((d) => `${d.nom_projet} (${d.count}×)`).join(", ")}
+                </span>
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Filter */}
         <div className="mb-6">
