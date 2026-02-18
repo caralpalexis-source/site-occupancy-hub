@@ -38,6 +38,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Plus, Pencil, Trash2, Users, Maximize, Calendar, Search, ChevronDown, ChevronRight } from "lucide-react";
+import { ServicePieChart } from "@/components/ServicePieChart";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { SortSelect, SortOption } from "@/components/SortSelect";
@@ -69,6 +70,7 @@ const Affectations: React.FC = () => {
     zones,
     affectationsTertiaires,
     affectationsOperationnelles,
+    dateEtat,
     addAffectationTertiaire,
     updateAffectationTertiaire,
     deleteAffectationTertiaire,
@@ -564,6 +566,12 @@ const Affectations: React.FC = () => {
                           <span className="text-sm text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
                             {affectations.length} personne{affectations.length > 1 ? "s" : ""}
                           </span>
+                          <ServicePieChart
+                            service={service}
+                            affectations={affectations}
+                            zones={zones}
+                            dateEtat={dateEtat}
+                          />
                         </div>
                       </div>
                     </CollapsibleTrigger>
