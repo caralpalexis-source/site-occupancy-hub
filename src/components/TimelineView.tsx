@@ -192,13 +192,13 @@ export const TimelineView: React.FC = () => {
           Timeline
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[95vw] max-h-[85vh] flex flex-col overflow-hidden">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[95vw] h-[85vh] flex flex-col overflow-hidden">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>Timeline des mouvements — 24 mois</DialogTitle>
         </DialogHeader>
 
         {/* Filters */}
-        <div className="flex flex-wrap gap-4 items-end">
+        <div className="flex flex-wrap gap-4 items-end flex-shrink-0">
           <div className="space-y-1.5">
             <Label className="text-xs">Bâtiment</Label>
             <Select value={selectedBatiment} onValueChange={handleBatimentChange}>
@@ -236,7 +236,7 @@ export const TimelineView: React.FC = () => {
           </p>
         </div>
 
-        <ScrollArea className="flex-1 mt-4 min-h-0">
+        <div className="flex-1 min-h-0 mt-4 overflow-y-auto">
           {zoneTimelines.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               Aucune zone à afficher
@@ -318,7 +318,7 @@ export const TimelineView: React.FC = () => {
               ))}
             </div>
           )}
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );
