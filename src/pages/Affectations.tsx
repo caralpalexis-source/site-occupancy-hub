@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/collapsible";
 import { Plus, Pencil, Trash2, Users, Maximize, Calendar, Search, ChevronDown, ChevronRight, AlertTriangle } from "lucide-react";
 import { ServicePieChart } from "@/components/ServicePieChart";
+import { TimelineView } from "@/components/TimelineView";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { SortSelect, SortOption } from "@/components/SortSelect";
@@ -425,11 +426,14 @@ const Affectations: React.FC = () => {
 
   return (
     <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-foreground">Gestion des Affectations</h1>
-        <p className="text-muted-foreground">
-          Gérez les affectations de personnes et projets aux zones
-        </p>
+      <div className="mb-8 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Gestion des Affectations</h1>
+          <p className="text-muted-foreground">
+            Gérez les affectations de personnes et projets aux zones
+          </p>
+        </div>
+        <TimelineView />
       </div>
 
       {/* Double affectation warning */}
@@ -604,7 +608,7 @@ const Affectations: React.FC = () => {
                   open={expandedServices.has(service)}
                   onOpenChange={() => toggleService(service)}
                 >
-                  <div className="bg-card rounded-xl border border-border overflow-hidden">
+                    <div className="bg-card rounded-xl border border-border overflow-hidden">
                     <CollapsibleTrigger className="w-full">
                       <div className="flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors">
                         <div className="flex items-center gap-3">
@@ -617,6 +621,8 @@ const Affectations: React.FC = () => {
                           <span className="text-sm text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
                             {affectations.length} personne{affectations.length > 1 ? "s" : ""}
                           </span>
+                        </div>
+                        <div onClick={(e) => e.stopPropagation()}>
                           <ServicePieChart
                             service={service}
                             affectations={affectations}
