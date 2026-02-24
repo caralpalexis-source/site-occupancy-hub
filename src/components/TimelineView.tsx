@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import { useApp } from "@/context/AppContext";
-import { Zone, AffectationTertiaire, AffectationOperationnelle } from "@/types";
+import { Zone } from "@/types";
 import {
   Dialog,
   DialogContent,
@@ -9,24 +9,18 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { CalendarRange } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Badge } from "@/components/ui/badge";
 import { format, addMonths, differenceInDays } from "date-fns";
 import { fr } from "date-fns/locale";
+import { MultiSelectDropdown } from "@/components/MultiSelectDropdown";
 
 const TIMELINE_COLORS = [
   "hsl(210, 70%, 50%)",
@@ -73,28 +67,50 @@ export const TimelineView: React.FC = () => {
   } = useApp();
 
   const [open, setOpen] = useState(false);
-  const [selectedBatiment, setSelectedBatiment] = useState<string>("__all__");
-  const [selectedZoneId, setSelectedZoneId] = useState<string>("__all__");
+  const [selectedBatiments, setSelectedBatiments] = useState<string[]>([]);
+  const [selectedZoneIds, setSelectedZoneIds] = useState<string[]>([]);
 
-  const batiments = useMemo(
+  // Initialize with all buildings selected when dialog opens
+  const handleOpenChange = useCallback((isOpen: boolean) => {
+    setOpen(isOpen);
+    if (isOpen) {
+      const allBats = [...new Set(zones.map((z) => z.batiment))];
+      setSelectedBatiments(allBats);
+      setSelectedZoneIds(zones.map((z) => z.id));
+    }
+  }, [zones]);
+
+  const batimentOptions = useMemo(
     () =>
-      [...new Set(zones.map((z) => z.batiment))].sort((a, b) =>
-        a.localeCompare(b, "fr", { numeric: true })
-      ),
+      [...new Set(zones.map((z) => z.batiment))]
+        .sort((a, b) => a.localeCompare(b, "fr", { numeric: true }))
+        .map((b) => ({ value: b, label: b })),
     [zones]
   );
 
+  const zoneOptions = useMemo(() => {
+    return zones
+      .filter((z) => selectedBatiments.includes(z.batiment))
+      .sort((a, b) => a.nom_zone.localeCompare(b.nom_zone, "fr", { numeric: true }))
+      .map((z) => ({ value: z.id, label: `${z.batiment} — ${z.nom_zone}` }));
+  }, [zones, selectedBatiments]);
+
+  // When batiments change, remove zones that no longer belong
+  const handleBatimentsChange = useCallback((newBatiments: string[]) => {
+    setSelectedBatiments(newBatiments);
+    setSelectedZoneIds((prev) => {
+      const validZoneIds = new Set(
+        zones.filter((z) => newBatiments.includes(z.batiment)).map((z) => z.id)
+      );
+      return prev.filter((id) => validZoneIds.has(id));
+    });
+  }, [zones]);
+
   const filteredZones = useMemo(() => {
-    let list = zones;
-    if (selectedZoneId !== "__all__") {
-      list = zones.filter((z) => z.id === selectedZoneId);
-    } else if (selectedBatiment !== "__all__") {
-      list = zones.filter((z) => z.batiment === selectedBatiment);
-    }
-    return [...list].sort((a, b) =>
-      a.nom_zone.localeCompare(b.nom_zone, "fr", { numeric: true })
-    );
-  }, [zones, selectedBatiment, selectedZoneId]);
+    return zones
+      .filter((z) => selectedZoneIds.includes(z.id))
+      .sort((a, b) => a.nom_zone.localeCompare(b.nom_zone, "fr", { numeric: true }));
+  }, [zones, selectedZoneIds]);
 
   const windowStart = useMemo(() => {
     const d = new Date();
@@ -169,23 +185,10 @@ export const TimelineView: React.FC = () => {
     return markers;
   }, [windowStart, windowEnd, totalDays]);
 
-  const handleBatimentChange = (val: string) => {
-    setSelectedBatiment(val);
-    setSelectedZoneId("__all__");
-  };
-
-  const zonesForSelect = useMemo(() => {
-    let list = zones;
-    if (selectedBatiment !== "__all__") {
-      list = zones.filter((z) => z.batiment === selectedBatiment);
-    }
-    return [...list].sort((a, b) =>
-      a.nom_zone.localeCompare(b.nom_zone, "fr", { numeric: true })
-    );
-  }, [zones, selectedBatiment]);
+  const filtersActive = selectedBatiments.length < batimentOptions.length || selectedZoneIds.length < zoneOptions.length;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
           <CalendarRange className="w-4 h-4 mr-2" />
@@ -194,42 +197,38 @@ export const TimelineView: React.FC = () => {
       </DialogTrigger>
       <DialogContent className="sm:max-w-[95vw] h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader className="flex-shrink-0">
-          <DialogTitle>Timeline des mouvements — 24 mois</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            Timeline des mouvements — 24 mois
+            {filtersActive && (
+              <Badge variant="secondary" className="text-[10px]">Filtres actifs</Badge>
+            )}
+          </DialogTitle>
         </DialogHeader>
 
         {/* Filters */}
         <div className="flex flex-wrap gap-4 items-end flex-shrink-0">
           <div className="space-y-1.5">
-            <Label className="text-xs">Bâtiment</Label>
-            <Select value={selectedBatiment} onValueChange={handleBatimentChange}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Tous" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">Tous les bâtiments</SelectItem>
-                {batiments.map((b) => (
-                  <SelectItem key={b} value={b}>
-                    {b}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label className="text-xs">Bâtiments</Label>
+            <MultiSelectDropdown
+              options={batimentOptions}
+              selected={selectedBatiments}
+              onChange={handleBatimentsChange}
+              placeholder="Sélectionner..."
+              allLabel="Tous les bâtiments"
+              className="w-[200px]"
+            />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Zone</Label>
-            <Select value={selectedZoneId} onValueChange={setSelectedZoneId}>
-              <SelectTrigger className="w-[220px]">
-                <SelectValue placeholder="Toutes" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">Toutes les zones</SelectItem>
-                {zonesForSelect.map((z) => (
-                  <SelectItem key={z.id} value={z.id}>
-                    {z.batiment} — {z.nom_zone}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label className="text-xs">Zones</Label>
+            <MultiSelectDropdown
+              options={zoneOptions}
+              selected={selectedZoneIds}
+              onChange={setSelectedZoneIds}
+              placeholder="Sélectionner..."
+              allLabel="Toutes les zones"
+              emptyLabel="Aucune zone disponible"
+              className="w-[240px]"
+            />
           </div>
           <p className="text-xs text-muted-foreground ml-auto">
             {format(windowStart, "d MMM yyyy", { locale: fr })} → {format(windowEnd, "d MMM yyyy", { locale: fr })}
@@ -239,7 +238,7 @@ export const TimelineView: React.FC = () => {
         <div className="flex-1 min-h-0 mt-4 overflow-y-auto">
           {zoneTimelines.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              Aucune zone à afficher
+              {selectedZoneIds.length === 0 ? "Aucune zone sélectionnée" : "Aucune zone à afficher"}
             </div>
           ) : (
             <div className="space-y-6 pr-4">
