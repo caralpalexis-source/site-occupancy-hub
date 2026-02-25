@@ -83,6 +83,15 @@ const sortOptionsOperationnelle: SortOption[] = [
   { value: "periode_asc", label: "Période (ancien → récent)" },
 ];
 
+const getStatutBadgeClass = (statut: string): string => {
+  switch (statut) {
+    case "Prestataire": return "border-blue-400 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-700";
+    case "Intérimaire": return "border-orange-400 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-700";
+    case "Alternant": return "border-green-400 bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300 dark:border-green-700";
+    default: return "border-border bg-muted text-muted-foreground";
+  }
+};
+
 const Affectations: React.FC = () => {
   const {
     zones,
@@ -166,6 +175,20 @@ const Affectations: React.FC = () => {
       );
     });
   }, [affectationsTertiaires, searchQuery, zones]);
+
+  // Statut distribution based on filtered tertiaires
+  const statutDistribution = useMemo(() => {
+    const total = filteredAffectationsTertiaires.length;
+    if (total === 0) return null;
+    const counts: Record<string, number> = { Titulaire: 0, Prestataire: 0, "Intérimaire": 0, Alternant: 0 };
+    filteredAffectationsTertiaires.forEach((aff) => {
+      const s = aff.statut || "Titulaire";
+      counts[s] = (counts[s] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .filter(([, count]) => count > 0)
+      .map(([statut, count]) => ({ statut, count, pct: Math.round((count / total) * 100) }));
+  }, [filteredAffectationsTertiaires]);
 
   // Filter operationnelle affectations based on search
   const filteredAffectationsOperationnelles = useMemo(() => {
@@ -396,7 +419,7 @@ const Affectations: React.FC = () => {
         </div>
       </TableCell>
       <TableCell>
-        <Badge variant="outline" className="text-xs">
+        <Badge variant="outline" className={cn("text-xs", getStatutBadgeClass(aff.statut || "Titulaire"))}>
           {aff.statut || "Titulaire"}
         </Badge>
       </TableCell>
@@ -612,6 +635,21 @@ const Affectations: React.FC = () => {
               </Dialog>
             </div>
           </div>
+
+          {/* Statut distribution indicator */}
+          {statutDistribution && (
+            <div className="flex flex-wrap items-center gap-3 px-4 py-2.5 bg-card rounded-lg border border-border">
+              {statutDistribution.map(({ statut, count, pct }) => (
+                <div key={statut} className="flex items-center gap-1.5 text-sm">
+                  <Badge variant="outline" className={cn("text-xs", getStatutBadgeClass(statut))}>
+                    {statut}
+                  </Badge>
+                  <span className="text-muted-foreground">{pct}%</span>
+                  <span className="text-muted-foreground/60 text-xs">({count})</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           {zonesTertiaires.length === 0 ? (
             <div className="text-center py-16 bg-card rounded-xl border border-border">

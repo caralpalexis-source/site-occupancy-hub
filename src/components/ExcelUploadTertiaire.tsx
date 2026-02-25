@@ -38,6 +38,7 @@ interface ParsedRow {
   nom: string;
   prenom: string;
   service: string;
+  statut: string;
   zoneName: string;
   date_debut: string;
   date_fin?: string;
@@ -183,6 +184,9 @@ export const ExcelUploadTertiaire: React.FC = () => {
         const nom = String(row["Nom"] || row["nom"] || "").trim();
         const prenom = String(row["Prénom"] || row["Prenom"] || row["prenom"] || "").trim();
         const service = String(row["Service"] || row["service"] || "").trim();
+        const rawStatut = String(row["Statut"] || row["statut"] || "").trim();
+        const validStatuts = ["Titulaire", "Prestataire", "Intérimaire", "Alternant"];
+        const statut = validStatuts.includes(rawStatut) ? rawStatut : "Titulaire";
         const zoneName = String(row["Zone"] || row["zone"] || "").trim();
         const dateDebutRaw = row["Date_debut"] || row["date_debut"] || row["Date debut"] || "";
         const dateFinRaw = row["Date_fin"] || row["date_fin"] || row["Date fin"] || "";
@@ -195,6 +199,7 @@ export const ExcelUploadTertiaire: React.FC = () => {
           nom,
           prenom,
           service,
+          statut,
           zoneName,
           date_debut: date_debut || "",
           date_fin,
@@ -295,6 +300,7 @@ export const ExcelUploadTertiaire: React.FC = () => {
         nom: row.nom,
         prenom: row.prenom,
         service: row.service,
+        statut: row.statut as any || "Titulaire",
         zone_id: row.zoneId || undefined,
         date_debut: row.date_debut,
         date_fin: row.date_fin,
@@ -315,6 +321,7 @@ export const ExcelUploadTertiaire: React.FC = () => {
           nom: row.nom,
           prenom: row.prenom,
           service: row.service,
+          statut: row.statut as any || "Titulaire",
           zone_id: row.suggestedZoneId,
           date_debut: row.date_debut,
           date_fin: row.date_fin,
@@ -327,6 +334,7 @@ export const ExcelUploadTertiaire: React.FC = () => {
           nom: row.nom,
           prenom: row.prenom,
           service: row.service,
+          statut: row.statut as any || "Titulaire",
           zone_id: undefined,
           date_debut: row.date_debut,
           date_fin: row.date_fin,

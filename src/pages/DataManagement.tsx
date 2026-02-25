@@ -68,6 +68,7 @@ const DataManagement: React.FC = () => {
           "Type ressource": "Tertiaire",
           "Nom": a.nom,
           "Prenom": a.prenom,
+          "Statut": a.statut || "Titulaire",
           "Surface": "",
           "Zone": zone ? zone.nom_zone : "Zone inconnue",
           "Periode": periode,
@@ -385,6 +386,7 @@ const DataManagement: React.FC = () => {
       "nom": "Dupont",
       "prenom": "Jean",
       "service": "IT",
+      "statut": "Titulaire", // optionnel: Titulaire|Prestataire|Intérimaire|Alternant
       "zone_id": "uuid",
       "date_debut": "2024-01-01",
       "date_fin": "2024-12-31" // optionnel
