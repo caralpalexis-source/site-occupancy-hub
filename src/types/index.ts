@@ -9,11 +9,15 @@ export interface Zone {
   image_plan?: string;
 }
 
+export const STATUTS_TERTIAIRE = ["Titulaire", "Prestataire", "Intérimaire", "Alternant"] as const;
+export type StatutTertiaire = typeof STATUTS_TERTIAIRE[number];
+
 export interface AffectationTertiaire {
   id: string;
   nom: string;
   prenom: string;
   service: string;
+  statut?: StatutTertiaire;
   zone_id?: string;
   date_debut: string;
   date_fin?: string;

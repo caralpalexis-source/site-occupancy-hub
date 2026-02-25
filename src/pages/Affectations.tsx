@@ -1,6 +1,14 @@
 import React, { useState, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
-import { AffectationTertiaire, AffectationOperationnelle } from "@/types";
+import { AffectationTertiaire, AffectationOperationnelle, STATUTS_TERTIAIRE } from "@/types";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -113,6 +121,7 @@ const Affectations: React.FC = () => {
     nom: "",
     prenom: "",
     service: "",
+    statut: "Titulaire" as string,
     zone_id: "",
     date_debut: "",
     date_fin: "",
@@ -148,10 +157,12 @@ const Affectations: React.FC = () => {
     return affectationsTertiaires.filter((aff) => {
       const fullName = `${aff.nom} ${aff.prenom}`;
       const zoneName = getZoneName(aff.zone_id);
+      const statut = aff.statut || "Titulaire";
       return (
         matchesSearch(fullName) ||
         matchesSearch(aff.service) ||
-        matchesSearch(zoneName)
+        matchesSearch(zoneName) ||
+        matchesSearch(statut)
       );
     });
   }, [affectationsTertiaires, searchQuery, zones]);
@@ -264,6 +275,7 @@ const Affectations: React.FC = () => {
       nom: "",
       prenom: "",
       service: "",
+      statut: "Titulaire",
       zone_id: "",
       date_debut: "",
       date_fin: "",
@@ -282,6 +294,7 @@ const Affectations: React.FC = () => {
       nom: aff.nom,
       prenom: aff.prenom,
       service: aff.service,
+      statut: aff.statut || "Titulaire",
       zone_id: aff.zone_id,
       date_debut: aff.date_debut,
       date_fin: aff.date_fin || "",
@@ -295,6 +308,7 @@ const Affectations: React.FC = () => {
       nom: tertiaireForm.nom,
       prenom: tertiaireForm.prenom,
       service: tertiaireForm.service,
+      statut: (tertiaireForm.statut || "Titulaire") as any,
       zone_id: tertiaireForm.zone_id || undefined,
       date_debut: tertiaireForm.date_debut,
       date_fin: tertiaireForm.date_fin || undefined,
@@ -380,6 +394,11 @@ const Affectations: React.FC = () => {
           )}
           {aff.prenom} {aff.nom}
         </div>
+      </TableCell>
+      <TableCell>
+        <Badge variant="outline" className="text-xs">
+          {aff.statut || "Titulaire"}
+        </Badge>
       </TableCell>
       <TableCell>{getZoneName(aff.zone_id)}</TableCell>
       <TableCell>
@@ -538,6 +557,22 @@ const Affectations: React.FC = () => {
                       />
                     </div>
                     <div className="space-y-2">
+                      <Label htmlFor="statut">Statut</Label>
+                      <Select
+                        value={tertiaireForm.statut}
+                        onValueChange={(v) => setTertiaireForm({ ...tertiaireForm, statut: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionner un statut" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {STATUTS_TERTIAIRE.map((s) => (
+                            <SelectItem key={s} value={s}>{s}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
                       <Label htmlFor="zone">Zone</Label>
                       <ZoneCombobox
                         zones={zonesTertiaires}
@@ -638,6 +673,7 @@ const Affectations: React.FC = () => {
                           <TableHeader>
                             <TableRow>
                               <TableHead>Personne</TableHead>
+                              <TableHead>Statut</TableHead>
                               <TableHead>Zone</TableHead>
                               <TableHead>Période</TableHead>
                               <TableHead className="text-right">Actions</TableHead>
