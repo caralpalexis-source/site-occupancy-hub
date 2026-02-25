@@ -69,6 +69,7 @@ const DataManagement: React.FC = () => {
           "Type ressource": "Tertiaire",
           "Nom": a.nom,
           "Prenom": a.prenom,
+          "Service": a.service || "",
           "Statut": a.statut || "Titulaire",
           "Surface": "",
           "Zone": zone ? zone.nom_zone : "Zone inconnue",
