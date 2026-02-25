@@ -65,6 +65,7 @@ const DataManagement: React.FC = () => {
           ? `${a.date_debut} -> ${a.date_fin}`
           : `${a.date_debut} -> `;
         rows.push({
+          "id_affectation": a.id,
           "Type ressource": "Tertiaire",
           "Nom": a.nom,
           "Prenom": a.prenom,
@@ -84,6 +85,7 @@ const DataManagement: React.FC = () => {
           ? `${a.date_debut} -> ${a.date_fin}`
           : `${a.date_debut} -> `;
         rows.push({
+          "id_affectation": a.id,
           "Type ressource": "Opérationnelle",
           "Nom": a.nom_projet,
           "Prenom": "",

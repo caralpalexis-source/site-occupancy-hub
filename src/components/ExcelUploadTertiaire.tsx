@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import * as XLSX from "xlsx";
 import { useApp } from "@/context/AppContext";
+import { STATUTS_TERTIAIRE, StatutTertiaire } from "@/types";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -21,6 +22,13 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Upload,
   FileSpreadsheet,
   CheckCircle2,
@@ -30,11 +38,16 @@ import {
   HelpCircle,
   Check,
   X,
+  RefreshCw,
+  PlusCircle,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
+type ImportMode = "add" | "sync";
+
 interface ParsedRow {
   rowNumber: number;
+  idAffectation?: string;
   nom: string;
   prenom: string;
   service: string;
@@ -49,7 +62,10 @@ interface ParsedRow {
   suggestedZoneId?: string;
   suggestedZoneName?: string;
   needsConfirmation?: boolean;
-  userConfirmed?: boolean; // true = accepted, false = refused, undefined = pending
+  userConfirmed?: boolean;
+  // Sync mode fields
+  syncAction?: "create" | "update" | "skip";
+  updatedFields?: string[];
 }
 
 interface ImportSummary {
@@ -58,6 +74,9 @@ interface ImportSummary {
   errorRows: ParsedRow[];
   duplicateRows: ParsedRow[];
   fuzzyRows: ParsedRow[];
+  // Sync mode stats
+  updateRows: ParsedRow[];
+  skipRows: ParsedRow[];
 }
 
 interface FinalReport {
@@ -65,10 +84,12 @@ interface FinalReport {
   exactMatches: number;
   fuzzyAccepted: number;
   unknownZone: number;
+  updated: number;
+  skipped: number;
 }
 
 export const ExcelUploadTertiaire: React.FC = () => {
-  const { zones, affectationsTertiaires, addAffectationTertiaire } = useApp();
+  const { zones, affectationsTertiaires, addAffectationTertiaire, updateAffectationTertiaire } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -76,6 +97,7 @@ export const ExcelUploadTertiaire: React.FC = () => {
   const [importSummary, setImportSummary] = useState<ImportSummary | null>(null);
   const [fileName, setFileName] = useState("");
   const [finalReport, setFinalReport] = useState<FinalReport | null>(null);
+  const [importMode, setImportMode] = useState<ImportMode>("add");
 
   const zonesTertiaires = zones.filter((z) => z.type === "tertiaire");
 
@@ -95,7 +117,6 @@ export const ExcelUploadTertiaire: React.FC = () => {
     const normalizedSearch = normalizeString(zoneName);
     if (!normalizedSearch) return undefined;
 
-    // Check if the search term is contained in any zone name, or vice versa
     let bestMatch: { zone: (typeof zonesTertiaires)[0]; score: number } | undefined;
 
     for (const z of zonesTertiaires) {
@@ -104,14 +125,11 @@ export const ExcelUploadTertiaire: React.FC = () => {
 
       let score = 0;
 
-      // Check if search term is contained in zone name
       if (justName.includes(normalizedSearch)) {
         score = normalizedSearch.length / justName.length;
       } else if (fullName.includes(normalizedSearch)) {
         score = normalizedSearch.length / fullName.length * 0.9;
-      }
-      // Check if zone name parts contain the search term
-      else {
+      } else {
         const zoneParts = justName.split(/[\s/\\-]+/);
         const searchParts = normalizedSearch.split(/[\s/\\-]+/);
         
@@ -165,6 +183,32 @@ export const ExcelUploadTertiaire: React.FC = () => {
     });
   };
 
+  const parsePeriode = (periodeStr: string): { date_debut?: string; date_fin?: string } => {
+    if (!periodeStr) return {};
+    const parts = periodeStr.split("->").map((s) => s.trim());
+    return {
+      date_debut: parseExcelDate(parts[0]),
+      date_fin: parts[1] ? parseExcelDate(parts[1]) : undefined,
+    };
+  };
+
+  const detectSyncChanges = (row: ParsedRow, existing: typeof affectationsTertiaires[0], resolvedZoneId?: string): string[] => {
+    const changes: string[] = [];
+    const newStatut = row.statut || "Titulaire";
+    const existingStatut = existing.statut || "Titulaire";
+    if (newStatut !== existingStatut) changes.push("Statut");
+    
+    const newZoneId = resolvedZoneId ?? undefined;
+    if (newZoneId !== existing.zone_id) changes.push("Zone");
+    
+    if (row.service && row.service !== existing.service) changes.push("Service");
+    
+    if (row.date_debut && row.date_debut !== existing.date_debut) changes.push("Date début");
+    if ((row.date_fin || "") !== (existing.date_fin || "")) changes.push("Date fin");
+    
+    return changes;
+  };
+
   const processFile = async (file: File) => {
     setIsProcessing(true);
     setFileName(file.name);
@@ -181,21 +225,32 @@ export const ExcelUploadTertiaire: React.FC = () => {
 
       jsonData.forEach((row, index) => {
         const rowNumber = index + 2;
+        const idAffectation = String(row["id_affectation"] || row["Id_affectation"] || row["ID_AFFECTATION"] || "").trim() || undefined;
         const nom = String(row["Nom"] || row["nom"] || "").trim();
         const prenom = String(row["Prénom"] || row["Prenom"] || row["prenom"] || "").trim();
         const service = String(row["Service"] || row["service"] || "").trim();
         const rawStatut = String(row["Statut"] || row["statut"] || "").trim();
-        const validStatuts = ["Titulaire", "Prestataire", "Intérimaire", "Alternant"];
-        const statut = validStatuts.includes(rawStatut) ? rawStatut : "Titulaire";
+        const validStatuts = [...STATUTS_TERTIAIRE];
+        const statut = validStatuts.includes(rawStatut as any) ? rawStatut : "Titulaire";
         const zoneName = String(row["Zone"] || row["zone"] || "").trim();
-        const dateDebutRaw = row["Date_debut"] || row["date_debut"] || row["Date debut"] || "";
-        const dateFinRaw = row["Date_fin"] || row["date_fin"] || row["Date fin"] || "";
+        
+        // Support both separate date columns and combined Periode column
+        let dateDebutRaw = row["Date_debut"] || row["date_debut"] || row["Date debut"] || "";
+        let dateFinRaw = row["Date_fin"] || row["date_fin"] || row["Date fin"] || "";
+        
+        const periodeRaw = String(row["Periode"] || row["periode"] || "").trim();
+        if (periodeRaw && !dateDebutRaw) {
+          const parsed = parsePeriode(periodeRaw);
+          dateDebutRaw = parsed.date_debut || "";
+          dateFinRaw = parsed.date_fin || "";
+        }
 
         const date_debut = parseExcelDate(dateDebutRaw);
         const date_fin = parseExcelDate(dateFinRaw);
 
         const parsedRow: ParsedRow = {
           rowNumber,
+          idAffectation,
           nom,
           prenom,
           service,
@@ -205,7 +260,7 @@ export const ExcelUploadTertiaire: React.FC = () => {
           date_fin,
         };
 
-        // Validate required fields (nom, prenom, service, date_debut)
+        // Validate required fields
         if (!nom) {
           parsedRow.error = "Nom manquant";
         } else if (!prenom) {
@@ -215,41 +270,80 @@ export const ExcelUploadTertiaire: React.FC = () => {
         } else if (!date_debut) {
           parsedRow.error = "Date de début invalide ou manquante";
         } else {
-          // Zone resolution: exact → fuzzy → NULL (zone inconnue)
+          // In sync mode, check if this is an update
+          if (importMode === "sync" && idAffectation) {
+            const existing = affectationsTertiaires.find((a) => a.id === idAffectation);
+            if (existing) {
+              // Resolve zone for comparison
+              let resolvedZoneId: string | undefined;
+              if (zoneName) {
+                const exactZone = findZoneExact(zoneName);
+                if (exactZone) {
+                  resolvedZoneId = exactZone.id;
+                } else {
+                  const fuzzyZone = findZoneFuzzy(zoneName);
+                  if (fuzzyZone) {
+                    parsedRow.needsConfirmation = true;
+                    parsedRow.suggestedZoneId = fuzzyZone.id;
+                    parsedRow.suggestedZoneName = `${fuzzyZone.batiment} - ${fuzzyZone.nom_zone}`;
+                    parsedRow.userConfirmed = undefined;
+                    parsedRow.syncAction = "update";
+                    parsedRows.push(parsedRow);
+                    return;
+                  }
+                }
+              }
+              
+              const changes = detectSyncChanges(parsedRow, existing, resolvedZoneId);
+              if (changes.length > 0) {
+                parsedRow.syncAction = "update";
+                parsedRow.updatedFields = changes;
+                parsedRow.zoneId = resolvedZoneId;
+              } else {
+                parsedRow.syncAction = "skip";
+              }
+              parsedRows.push(parsedRow);
+              return;
+            }
+            // id unknown → treat as create (fall through)
+          }
+
+          // Zone resolution for create
           if (zoneName) {
             const exactZone = findZoneExact(zoneName);
             if (exactZone) {
               parsedRow.zoneId = exactZone.id;
-              parsedRow.isDuplicate = isDuplicateAffectation(parsedRow, exactZone.id);
+              if (importMode === "add") {
+                parsedRow.isDuplicate = isDuplicateAffectation(parsedRow, exactZone.id);
+              }
             } else {
               const fuzzyZone = findZoneFuzzy(zoneName);
               if (fuzzyZone) {
-                // Mark for user confirmation
                 parsedRow.needsConfirmation = true;
                 parsedRow.suggestedZoneId = fuzzyZone.id;
                 parsedRow.suggestedZoneName = `${fuzzyZone.batiment} - ${fuzzyZone.nom_zone}`;
-                // Default: not yet decided
                 parsedRow.userConfirmed = undefined;
               } else {
-              // No match at all → zone inconnue (NULL)
                 parsedRow.zoneId = undefined;
               }
             }
           } else {
-            // No zone specified → zone inconnue (NULL)
             parsedRow.zoneId = undefined;
           }
         }
 
+        parsedRow.syncAction = parsedRow.syncAction || "create";
         parsedRows.push(parsedRow);
       });
 
-      const validRows = parsedRows.filter((r) => !r.error && !r.isDuplicate && !r.needsConfirmation);
+      const validRows = parsedRows.filter((r) => !r.error && !r.isDuplicate && !r.needsConfirmation && r.syncAction === "create");
       const errorRows = parsedRows.filter((r) => r.error);
       const duplicateRows = parsedRows.filter((r) => !r.error && r.isDuplicate);
       const fuzzyRows = parsedRows.filter((r) => !r.error && r.needsConfirmation);
+      const updateRows = parsedRows.filter((r) => !r.error && r.syncAction === "update" && !r.needsConfirmation);
+      const skipRows = parsedRows.filter((r) => !r.error && r.syncAction === "skip");
 
-      setImportSummary({ totalRows: parsedRows.length, validRows, errorRows, duplicateRows, fuzzyRows });
+      setImportSummary({ totalRows: parsedRows.length, validRows, errorRows, duplicateRows, fuzzyRows, updateRows, skipRows });
       setIsDialogOpen(true);
     } catch (error) {
       console.error("Error processing Excel file:", error);
@@ -293,14 +387,16 @@ export const ExcelUploadTertiaire: React.FC = () => {
     let exactMatches = 0;
     let fuzzyAccepted = 0;
     let unknownZone = 0;
+    let updatedCount = 0;
+    let skippedCount = importSummary.skipRows.length;
 
-    // Import valid rows (exact matches + unknown zones)
+    // Import valid rows (creates with exact matches + unknown zones)
     importSummary.validRows.forEach((row) => {
       addAffectationTertiaire({
         nom: row.nom,
         prenom: row.prenom,
         service: row.service,
-        statut: row.statut as any || "Titulaire",
+        statut: (row.statut as StatutTertiaire) || "Titulaire",
         zone_id: row.zoneId || undefined,
         date_debut: row.date_debut,
         date_fin: row.date_fin,
@@ -316,12 +412,27 @@ export const ExcelUploadTertiaire: React.FC = () => {
     // Import fuzzy rows based on user decisions
     importSummary.fuzzyRows.forEach((row) => {
       if (row.userConfirmed === true && row.suggestedZoneId) {
-        // User accepted the suggestion
+        if (row.syncAction === "update" && row.idAffectation) {
+          const existing = affectationsTertiaires.find((a) => a.id === row.idAffectation);
+          if (existing) {
+            updateAffectationTertiaire({
+              ...existing,
+              service: row.service || existing.service,
+              statut: (row.statut as StatutTertiaire) || existing.statut || "Titulaire",
+              zone_id: row.suggestedZoneId,
+              date_debut: row.date_debut || existing.date_debut,
+              date_fin: row.date_fin,
+            });
+            updatedCount++;
+            fuzzyAccepted++;
+            return;
+          }
+        }
         addAffectationTertiaire({
           nom: row.nom,
           prenom: row.prenom,
           service: row.service,
-          statut: row.statut as any || "Titulaire",
+          statut: (row.statut as StatutTertiaire) || "Titulaire",
           zone_id: row.suggestedZoneId,
           date_debut: row.date_debut,
           date_fin: row.date_fin,
@@ -329,12 +440,27 @@ export const ExcelUploadTertiaire: React.FC = () => {
         importedCount++;
         fuzzyAccepted++;
       } else if (row.userConfirmed === false) {
-        // User refused → zone inconnue (NULL)
+        if (row.syncAction === "update" && row.idAffectation) {
+          const existing = affectationsTertiaires.find((a) => a.id === row.idAffectation);
+          if (existing) {
+            updateAffectationTertiaire({
+              ...existing,
+              service: row.service || existing.service,
+              statut: (row.statut as StatutTertiaire) || existing.statut || "Titulaire",
+              zone_id: undefined,
+              date_debut: row.date_debut || existing.date_debut,
+              date_fin: row.date_fin,
+            });
+            updatedCount++;
+            unknownZone++;
+            return;
+          }
+        }
         addAffectationTertiaire({
           nom: row.nom,
           prenom: row.prenom,
           service: row.service,
-          statut: row.statut as any || "Titulaire",
+          statut: (row.statut as StatutTertiaire) || "Titulaire",
           zone_id: undefined,
           date_debut: row.date_debut,
           date_fin: row.date_fin,
@@ -344,7 +470,24 @@ export const ExcelUploadTertiaire: React.FC = () => {
       }
     });
 
-    setFinalReport({ totalImported: importedCount, exactMatches, fuzzyAccepted, unknownZone });
+    // Process update rows (sync mode)
+    importSummary.updateRows.forEach((row) => {
+      if (!row.idAffectation) return;
+      const existing = affectationsTertiaires.find((a) => a.id === row.idAffectation);
+      if (!existing) return;
+
+      updateAffectationTertiaire({
+        ...existing,
+        service: row.service || existing.service,
+        statut: (row.statut as StatutTertiaire) || existing.statut || "Titulaire",
+        zone_id: row.zoneId !== undefined ? row.zoneId : existing.zone_id,
+        date_debut: row.date_debut || existing.date_debut,
+        date_fin: row.date_fin,
+      });
+      updatedCount++;
+    });
+
+    setFinalReport({ totalImported: importedCount, exactMatches, fuzzyAccepted, unknownZone, updated: updatedCount, skipped: skippedCount });
   };
 
   const handleClose = () => {
@@ -355,7 +498,8 @@ export const ExcelUploadTertiaire: React.FC = () => {
 
   const importableCount =
     (importSummary?.validRows.length ?? 0) +
-    (importSummary?.fuzzyRows.filter((r) => r.userConfirmed !== undefined).length ?? 0);
+    (importSummary?.fuzzyRows.filter((r) => r.userConfirmed !== undefined).length ?? 0) +
+    (importSummary?.updateRows.length ?? 0);
 
   return (
     <>
@@ -367,31 +511,55 @@ export const ExcelUploadTertiaire: React.FC = () => {
         className="hidden"
       />
 
-      <Button
-        variant="outline"
-        onClick={() => fileInputRef.current?.click()}
-        disabled={isProcessing}
-      >
-        {isProcessing ? (
-          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-        ) : (
-          <Upload className="w-4 h-4 mr-2" />
-        )}
-        Import Excel
-      </Button>
+      <div className="flex items-center gap-2">
+        <Select value={importMode} onValueChange={(v) => setImportMode(v as ImportMode)}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="add">
+              <span className="flex items-center gap-2">
+                <PlusCircle className="w-3.5 h-3.5" />
+                Ajout uniquement
+              </span>
+            </SelectItem>
+            <SelectItem value="sync">
+              <span className="flex items-center gap-2">
+                <RefreshCw className="w-3.5 h-3.5" />
+                Synchronisation
+              </span>
+            </SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Button
+          variant="outline"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isProcessing}
+        >
+          {isProcessing ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <Upload className="w-4 h-4 mr-2" />
+          )}
+          Import Excel
+        </Button>
+      </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[900px] max-w-[95vw] h-[80vh] flex flex-col p-0 gap-0">
-          {/* HEADER - fixed */}
+          {/* HEADER */}
           <div className="p-6 pb-4 border-b flex-shrink-0">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <FileSpreadsheet className="w-5 h-5" />
                 Import des affectations tertiaires
+                <Badge variant="outline" className="ml-2 text-xs">
+                  {importMode === "add" ? "Ajout uniquement" : "Synchronisation"}
+                </Badge>
               </DialogTitle>
               <DialogDescription>Fichier : {fileName}</DialogDescription>
             </DialogHeader>
-            {/* Fuzzy counter in header */}
             {importSummary && !finalReport && importSummary.fuzzyRows.length > 0 && (
               <div className="mt-3 text-sm font-medium">
                 Décisions prises : {importSummary.fuzzyRows.filter((r) => r.userConfirmed !== undefined).length} / {importSummary.fuzzyRows.length}
@@ -399,7 +567,7 @@ export const ExcelUploadTertiaire: React.FC = () => {
             )}
           </div>
 
-          {/* CONTENT - scrollable */}
+          {/* CONTENT */}
           <div className="flex-1 overflow-y-auto p-6">
             {/* Final report */}
             {finalReport && (
@@ -408,10 +576,10 @@ export const ExcelUploadTertiaire: React.FC = () => {
                   <CheckCircle2 className="w-6 h-6" />
                   <h3 className="text-lg font-semibold">Import terminé</h3>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   <div className="p-3 bg-muted rounded-lg">
                     <div className="text-2xl font-bold">{finalReport.totalImported}</div>
-                    <div className="text-sm text-muted-foreground">affectations importées</div>
+                    <div className="text-sm text-muted-foreground">créations</div>
                   </div>
                   <div className="p-3 bg-primary/10 rounded-lg">
                     <div className="text-2xl font-bold text-primary">{finalReport.exactMatches}</div>
@@ -425,6 +593,18 @@ export const ExcelUploadTertiaire: React.FC = () => {
                     <div className="text-2xl font-bold text-secondary-foreground">{finalReport.unknownZone}</div>
                     <div className="text-sm text-muted-foreground">zones inconnues</div>
                   </div>
+                  {importMode === "sync" && (
+                    <>
+                      <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg">
+                        <div className="text-2xl font-bold text-primary">{finalReport.updated}</div>
+                        <div className="text-sm text-muted-foreground">mises à jour</div>
+                      </div>
+                      <div className="p-3 bg-muted rounded-lg">
+                        <div className="text-2xl font-bold text-muted-foreground">{finalReport.skipped}</div>
+                        <div className="text-sm text-muted-foreground">ignorées (identiques)</div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -441,7 +621,7 @@ export const ExcelUploadTertiaire: React.FC = () => {
                   <div className="p-3 bg-primary/10 rounded-lg text-center">
                     <CheckCircle2 className="w-4 h-4 text-primary mx-auto mb-1" />
                     <div className="text-2xl font-bold text-primary">{importSummary.validRows.length}</div>
-                    <div className="text-xs text-muted-foreground">valides</div>
+                    <div className="text-xs text-muted-foreground">créations</div>
                   </div>
                   <div className="p-3 bg-accent rounded-lg text-center">
                     <HelpCircle className="w-4 h-4 text-accent-foreground mx-auto mb-1" />
@@ -454,6 +634,21 @@ export const ExcelUploadTertiaire: React.FC = () => {
                     <div className="text-xs text-muted-foreground">erreurs</div>
                   </div>
                 </div>
+
+                {/* Sync mode stats */}
+                {importMode === "sync" && (importSummary.updateRows.length > 0 || importSummary.skipRows.length > 0) && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg text-center">
+                      <RefreshCw className="w-4 h-4 text-primary mx-auto mb-1" />
+                      <div className="text-2xl font-bold text-primary">{importSummary.updateRows.length}</div>
+                      <div className="text-xs text-muted-foreground">mises à jour</div>
+                    </div>
+                    <div className="p-3 bg-muted rounded-lg text-center">
+                      <div className="text-2xl font-bold text-muted-foreground">{importSummary.skipRows.length}</div>
+                      <div className="text-xs text-muted-foreground">identiques (ignorées)</div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Duplicates warning */}
                 {importSummary.duplicateRows.length > 0 && (
@@ -470,7 +665,43 @@ export const ExcelUploadTertiaire: React.FC = () => {
                   </div>
                 )}
 
-                {/* Fuzzy match rows requiring confirmation */}
+                {/* Update rows detail (sync mode) */}
+                {importSummary.updateRows.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="font-medium text-primary flex items-center gap-2">
+                      <RefreshCw className="w-4 h-4" />
+                      Mises à jour détectées ({importSummary.updateRows.length})
+                    </h4>
+                    <div className="border rounded-lg">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-12">Ligne</TableHead>
+                            <TableHead>Personne</TableHead>
+                            <TableHead>Champs modifiés</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {importSummary.updateRows.map((row) => (
+                            <TableRow key={row.rowNumber}>
+                              <TableCell className="font-mono text-sm">{row.rowNumber}</TableCell>
+                              <TableCell className="text-sm">{row.prenom} {row.nom}</TableCell>
+                              <TableCell>
+                                <div className="flex gap-1 flex-wrap">
+                                  {row.updatedFields?.map((f) => (
+                                    <Badge key={f} variant="outline" className="text-xs">{f}</Badge>
+                                  ))}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Fuzzy match rows */}
                 {importSummary.fuzzyRows.length > 0 && (
                   <div className="space-y-2">
                     <h4 className="font-medium text-accent-foreground flex items-center gap-2">
@@ -621,7 +852,7 @@ export const ExcelUploadTertiaire: React.FC = () => {
             )}
           </div>
 
-          {/* FOOTER - fixed */}
+          {/* FOOTER */}
           <div className="p-4 border-t flex-shrink-0 flex justify-end gap-2">
             {finalReport ? (
               <Button onClick={handleClose}>Fermer</Button>
