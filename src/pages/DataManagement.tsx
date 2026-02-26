@@ -215,15 +215,43 @@ const DataManagement: React.FC = () => {
     return rows;
   };
 
+  const applySheetFormatting = (ws: XLSX.WorkSheet, rows: Record<string, string>[]) => {
+    if (rows.length === 0) return;
+    const headers = Object.keys(rows[0]);
+    const colCount = headers.length;
+    const rowCount = rows.length + 1; // +1 for header
+
+    // Auto column widths
+    const colWidths = headers.map((h, i) => {
+      let max = h.length;
+      rows.forEach((r) => {
+        const val = r[h] || "";
+        if (val.length > max) max = val.length;
+      });
+      return { wch: Math.min(max + 2, 40) };
+    });
+    ws["!cols"] = colWidths;
+
+    // Freeze first row
+    ws["!freeze"] = { xSplit: 0, ySplit: 1 };
+    if (!ws["!views"]) ws["!views"] = [];
+    (ws["!views"] as any[]).push({ state: "frozen", ySplit: 1 });
+
+    // Autofilter on header row
+    ws["!autofilter"] = {
+      ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rowCount - 1, c: colCount - 1 } }),
+    };
+  };
+
   const handleExportExcel = () => {
     const date = excelExportDate;
     const rows = buildExcelRows(date);
 
     const ws = XLSX.utils.json_to_sheet(rows);
+    applySheetFormatting(ws, rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Affectations");
 
-    // Add notice sheet
     const noticeWs = XLSX.utils.aoa_to_sheet([
       ["⚠️ Fichier de consultation – non destiné à la synchronisation."],
       ["Export photo à date : " + format(date, "PPP", { locale: fr })],
@@ -233,7 +261,7 @@ const DataManagement: React.FC = () => {
     XLSX.utils.book_append_sheet(wb, noticeWs, "Information");
 
     const dateStr = format(date, "yyyy-MM-dd");
-    XLSX.writeFile(wb, `export_photo_${dateStr}.xls`, { bookType: "xls" });
+    XLSX.writeFile(wb, `export_photo_${dateStr}.xlsx`, { bookType: "xlsx" });
 
     setExcelExportOpen(false);
     toast({
@@ -246,10 +274,10 @@ const DataManagement: React.FC = () => {
     const rows = buildExcelRows();
 
     const ws = XLSX.utils.json_to_sheet(rows);
+    applySheetFormatting(ws, rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Affectations");
 
-    // Add notice sheet
     const noticeWs = XLSX.utils.aoa_to_sheet([
       ["✅ Fichier d'export complet pour synchronisation."],
       ["Date d'export : " + format(new Date(), "PPP", { locale: fr })],
@@ -259,7 +287,7 @@ const DataManagement: React.FC = () => {
     XLSX.utils.book_append_sheet(wb, noticeWs, "Information");
 
     const dateStr = format(new Date(), "yyyy-MM-dd");
-    XLSX.writeFile(wb, `export_complet_sync_${dateStr}.xls`, { bookType: "xls" });
+    XLSX.writeFile(wb, `export_complet_sync_${dateStr}.xlsx`, { bookType: "xlsx" });
 
     toast({
       title: "Export complet réussi",
@@ -431,12 +459,15 @@ const DataManagement: React.FC = () => {
               </Button>
               <Button onClick={() => { setExcelExportDate(new Date()); setExcelExportOpen(true); }} variant="outline" className="w-full">
                 <FileSpreadsheet className="w-4 h-4 mr-2" />
-                Export Excel – Photo à date
+                Export Excel – Photo à date (.xlsx)
               </Button>
               <Button onClick={handleExportExcelComplet} variant="outline" className="w-full">
                 <RefreshCw className="w-4 h-4 mr-2" />
-                Export complet pour synchronisation
+                Export complet pour synchronisation (.xlsx)
               </Button>
+              <p className="text-xs text-muted-foreground mt-1">
+                ⚠️ Seul l'export complet doit être utilisé pour les mises à jour via le mode Synchronisation.
+              </p>
             </div>
           </CardContent>
         </Card>
