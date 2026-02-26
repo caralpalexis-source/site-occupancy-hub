@@ -29,7 +29,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
-import { Download, Upload, FileJson, FileSpreadsheet, CheckCircle, XCircle, AlertTriangle, HardDrive } from "lucide-react";
+import { Download, Upload, FileJson, FileSpreadsheet, CheckCircle, XCircle, AlertTriangle, HardDrive, RefreshCw } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "@/hooks/use-toast";
 
@@ -171,60 +171,99 @@ const DataManagement: React.FC = () => {
     return fin >= checkDate;
   };
 
+  const buildExcelRows = (filterDate?: Date) => {
+    const rows: Record<string, string>[] = [];
+    const tertiaires = filterDate
+      ? affectationsTertiaires.filter((a) => isActiveAtDate(a.date_debut, a.date_fin, filterDate))
+      : affectationsTertiaires;
+    const operationnelles = filterDate
+      ? affectationsOperationnelles.filter((a) => isActiveAtDate(a.date_debut, a.date_fin, filterDate))
+      : affectationsOperationnelles;
+
+    tertiaires.forEach((a) => {
+      const zone = zones.find((z) => z.id === a.zone_id);
+      rows.push({
+        "id_affectation": a.id,
+        "Type ressource": "Tertiaire",
+        "Nom": a.nom,
+        "Prenom": a.prenom,
+        "Service": a.service || "",
+        "Statut": a.statut || "Titulaire",
+        "Surface": "",
+        "Zone": zone ? zone.nom_zone : "Zone inconnue",
+        "Date_debut": a.date_debut,
+        "Date_fin": a.date_fin || "",
+      });
+    });
+
+    operationnelles.forEach((a) => {
+      const zone = zones.find((z) => z.id === a.zone_id);
+      rows.push({
+        "id_affectation": a.id,
+        "Type ressource": "Opérationnelle",
+        "Nom": a.nom_projet,
+        "Prenom": "",
+        "Service": "",
+        "Statut": "",
+        "Surface": String(a.surface_necessaire),
+        "Zone": zone ? zone.nom_zone : "Zone inconnue",
+        "Date_debut": a.date_debut,
+        "Date_fin": a.date_fin || "",
+      });
+    });
+
+    return rows;
+  };
+
   const handleExportExcel = () => {
     const date = excelExportDate;
-    const rows: Record<string, string>[] = [];
-
-    // Tertiaires actives à la date
-    affectationsTertiaires
-      .filter((a) => isActiveAtDate(a.date_debut, a.date_fin, date))
-      .forEach((a) => {
-        const zone = zones.find((z) => z.id === a.zone_id);
-        const periode = a.date_fin
-          ? `${a.date_debut} -> ${a.date_fin}`
-          : `${a.date_debut} -> `;
-        rows.push({
-          "id_affectation": a.id,
-          "Type ressource": "Tertiaire",
-          "Nom": a.nom,
-          "Prenom": a.prenom,
-          "Service": a.service || "",
-          "Statut": a.statut || "Titulaire",
-          "Surface": "",
-          "Zone": zone ? zone.nom_zone : "Zone inconnue",
-          "Periode": periode,
-        });
-      });
-
-    // Opérationnelles actives à la date
-    affectationsOperationnelles
-      .filter((a) => isActiveAtDate(a.date_debut, a.date_fin, date))
-      .forEach((a) => {
-        const zone = zones.find((z) => z.id === a.zone_id);
-        const periode = a.date_fin
-          ? `${a.date_debut} -> ${a.date_fin}`
-          : `${a.date_debut} -> `;
-        rows.push({
-          "id_affectation": a.id,
-          "Type ressource": "Opérationnelle",
-          "Nom": a.nom_projet,
-          "Prenom": "",
-          "Surface": String(a.surface_necessaire),
-          "Zone": zone ? zone.nom_zone : "Zone inconnue",
-          "Periode": periode,
-        });
-      });
+    const rows = buildExcelRows(date);
 
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Affectations");
+
+    // Add notice sheet
+    const noticeWs = XLSX.utils.aoa_to_sheet([
+      ["⚠️ Fichier de consultation – non destiné à la synchronisation."],
+      ["Export photo à date : " + format(date, "PPP", { locale: fr })],
+      ["Ce fichier ne contient que les affectations actives à cette date."],
+      ["Pour la synchronisation, utilisez l'export complet."],
+    ]);
+    XLSX.utils.book_append_sheet(wb, noticeWs, "Information");
+
     const dateStr = format(date, "yyyy-MM-dd");
-    XLSX.writeFile(wb, `export_affectations_${dateStr}.xls`, { bookType: "xls" });
+    XLSX.writeFile(wb, `export_photo_${dateStr}.xls`, { bookType: "xls" });
 
     setExcelExportOpen(false);
     toast({
       title: "Export Excel réussi",
       description: `${rows.length} affectations exportées au ${format(date, "PPP", { locale: fr })}.`,
+    });
+  };
+
+  const handleExportExcelComplet = () => {
+    const rows = buildExcelRows();
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Affectations");
+
+    // Add notice sheet
+    const noticeWs = XLSX.utils.aoa_to_sheet([
+      ["✅ Fichier d'export complet pour synchronisation."],
+      ["Date d'export : " + format(new Date(), "PPP", { locale: fr })],
+      ["Ce fichier contient toutes les affectations (passées, actives, futures)."],
+      ["Il peut être utilisé en mode Synchronisation à l'import."],
+    ]);
+    XLSX.utils.book_append_sheet(wb, noticeWs, "Information");
+
+    const dateStr = format(new Date(), "yyyy-MM-dd");
+    XLSX.writeFile(wb, `export_complet_sync_${dateStr}.xls`, { bookType: "xls" });
+
+    toast({
+      title: "Export complet réussi",
+      description: `${rows.length} affectations exportées (toutes périodes confondues).`,
     });
   };
 
@@ -385,14 +424,18 @@ const DataManagement: React.FC = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex gap-2">
-              <Button onClick={handleExportJSON} className="flex-1">
+            <div className="flex flex-col gap-2">
+              <Button onClick={handleExportJSON} className="w-full">
                 <FileJson className="w-4 h-4 mr-2" />
                 Exporter en JSON
               </Button>
-              <Button onClick={() => { setExcelExportDate(new Date()); setExcelExportOpen(true); }} variant="outline" className="flex-1">
+              <Button onClick={() => { setExcelExportDate(new Date()); setExcelExportOpen(true); }} variant="outline" className="w-full">
                 <FileSpreadsheet className="w-4 h-4 mr-2" />
-                Export Excel
+                Export Excel – Photo à date
+              </Button>
+              <Button onClick={handleExportExcelComplet} variant="outline" className="w-full">
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Export complet pour synchronisation
               </Button>
             </div>
           </CardContent>

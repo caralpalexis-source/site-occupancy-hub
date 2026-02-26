@@ -281,6 +281,24 @@ export const ExcelUploadTertiaire: React.FC = () => {
     try {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data, { type: "array", cellDates: true });
+
+      // Detect if this is a "Photo à date" file (partial export)
+      if (importMode === "sync" && workbook.SheetNames.includes("Information")) {
+        const infoSheet = workbook.Sheets["Information"];
+        const infoData = XLSX.utils.sheet_to_json<unknown[]>(infoSheet, { header: 1 });
+        const infoText = infoData.map((row) => String(row?.[0] || "")).join(" ");
+        if (infoText.includes("consultation") || infoText.includes("photo")) {
+          toast({
+            title: "⚠️ Fichier incompatible avec la synchronisation",
+            description: "Ce fichier est un export « Photo à date » (partiel). Le mode Synchronisation nécessite un export complet. Veuillez utiliser le bouton « Export complet pour synchronisation » ou basculer en mode « Ajout uniquement ».",
+            variant: "destructive",
+          });
+          setIsProcessing(false);
+          if (fileInputRef.current) fileInputRef.current.value = "";
+          return;
+        }
+      }
+
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { raw: false, defval: "" });
