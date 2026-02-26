@@ -1,4 +1,5 @@
 import React, { useState, useRef } from "react";
+import { Separator } from "@/components/ui/separator";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import * as XLSX from "xlsx";
@@ -33,16 +34,37 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "@/hooks/use-toast";
 
 const STORAGE_LIMIT_BYTES = 5 * 1024 * 1024; // 5 Mo
+const STORAGE_KEY = "site-management-data";
+const BUILDING_PLANS_KEY = "site-management-building-plans";
 
 const getLocalStorageSize = (): number => {
   let total = 0;
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (key) {
-      total += (key.length + (localStorage.getItem(key)?.length || 0)) * 2; // UTF-16
+      total += (key.length + (localStorage.getItem(key)?.length || 0)) * 2;
     }
   }
   return total;
+};
+
+const getKeySize = (key: string): number => {
+  const val = localStorage.getItem(key);
+  if (!val) return 0;
+  return (key.length + val.length) * 2;
+};
+
+const getCategorySize = (key: string, field?: string): number => {
+  const raw = localStorage.getItem(key);
+  if (!raw) return 0;
+  if (!field) return (key.length + raw.length) * 2;
+  try {
+    const data = JSON.parse(raw);
+    const fieldJson = JSON.stringify(data[field] || []);
+    return fieldJson.length * 2;
+  } catch {
+    return 0;
+  }
 };
 
 const StorageIndicator: React.FC = () => {
@@ -51,11 +73,25 @@ const StorageIndicator: React.FC = () => {
   const limitKo = STORAGE_LIMIT_BYTES / 1024;
   const percentage = Math.min((usedBytes / STORAGE_LIMIT_BYTES) * 100, 100);
 
-  const formatSize = (ko: number) =>
-    ko >= 1024 ? `${(ko / 1024).toFixed(2)} Mo` : `${ko.toFixed(1)} Ko`;
+  const zonesSize = getCategorySize(STORAGE_KEY, "zones");
+  const tertiaireSize = getCategorySize(STORAGE_KEY, "affectationsTertiaires");
+  const operationnelleSize = getCategorySize(STORAGE_KEY, "affectationsOperationnelles");
+  const plansSize = getKeySize(BUILDING_PLANS_KEY);
+
+  const formatSize = (bytes: number) => {
+    const ko = bytes / 1024;
+    return ko >= 1024 ? `${(ko / 1024).toFixed(2)} Mo` : `${ko.toFixed(1)} Ko`;
+  };
 
   const barColor =
     percentage > 85 ? "bg-destructive" : percentage > 60 ? "bg-warning" : "bg-success";
+
+  const categories = [
+    { label: "Zones", size: zonesSize },
+    { label: "Affectations tertiaires", size: tertiaireSize },
+    { label: "Affectations opérationnelles", size: operationnelleSize },
+    { label: "Plans bâtiments", size: plansSize },
+  ];
 
   return (
     <Card className="mb-8">
@@ -66,10 +102,10 @@ const StorageIndicator: React.FC = () => {
         </CardTitle>
         <CardDescription>Utilisation du Local Storage du navigateur</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-4">
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">
-            {formatSize(usedKo)} / {formatSize(limitKo)}
+            {formatSize(usedBytes)} / {formatSize(STORAGE_LIMIT_BYTES)}
           </span>
           <span className="font-medium text-foreground">{percentage.toFixed(1)}%</span>
         </div>
@@ -88,6 +124,27 @@ const StorageIndicator: React.FC = () => {
             </AlertDescription>
           </Alert>
         )}
+
+        <Separator />
+
+        <div>
+          <h4 className="text-sm font-medium flex items-center gap-1.5 mb-3">
+            📊 Détail du stockage
+          </h4>
+          <div className="space-y-2">
+            {categories.map((cat) => (
+              <div key={cat.label} className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">{cat.label}</span>
+                <span className="font-mono text-foreground">{formatSize(cat.size)}</span>
+              </div>
+            ))}
+            <Separator className="my-1" />
+            <div className="flex justify-between items-center text-sm font-semibold">
+              <span>Total</span>
+              <span className="font-mono">{formatSize(usedBytes)}</span>
+            </div>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
