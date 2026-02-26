@@ -28,8 +28,70 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
-import { Download, Upload, FileJson, FileSpreadsheet, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
+import { Download, Upload, FileJson, FileSpreadsheet, CheckCircle, XCircle, AlertTriangle, HardDrive } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "@/hooks/use-toast";
+
+const STORAGE_LIMIT_BYTES = 5 * 1024 * 1024; // 5 Mo
+
+const getLocalStorageSize = (): number => {
+  let total = 0;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key) {
+      total += (key.length + (localStorage.getItem(key)?.length || 0)) * 2; // UTF-16
+    }
+  }
+  return total;
+};
+
+const StorageIndicator: React.FC = () => {
+  const usedBytes = getLocalStorageSize();
+  const usedKo = usedBytes / 1024;
+  const limitKo = STORAGE_LIMIT_BYTES / 1024;
+  const percentage = Math.min((usedBytes / STORAGE_LIMIT_BYTES) * 100, 100);
+
+  const formatSize = (ko: number) =>
+    ko >= 1024 ? `${(ko / 1024).toFixed(2)} Mo` : `${ko.toFixed(1)} Ko`;
+
+  const barColor =
+    percentage > 85 ? "bg-destructive" : percentage > 60 ? "bg-warning" : "bg-success";
+
+  return (
+    <Card className="mb-8">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg flex items-center gap-2">
+          <HardDrive className="w-5 h-5 text-primary" />
+          Stockage Local
+        </CardTitle>
+        <CardDescription>Utilisation du Local Storage du navigateur</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">
+            {formatSize(usedKo)} / {formatSize(limitKo)}
+          </span>
+          <span className="font-medium text-foreground">{percentage.toFixed(1)}%</span>
+        </div>
+        <div className="relative h-3 w-full overflow-hidden rounded-full bg-secondary">
+          <div
+            className={`h-full rounded-full transition-all ${barColor}`}
+            style={{ width: `${percentage}%` }}
+          />
+        </div>
+        {percentage > 85 && (
+          <Alert className="border-destructive/50 bg-destructive/10">
+            <AlertTriangle className="h-4 w-4 text-destructive" />
+            <AlertTitle className="text-destructive text-sm">Capacité critique</AlertTitle>
+            <AlertDescription className="text-sm">
+              Attention : capacité de stockage bientôt atteinte. Envisager un export et nettoyage.
+            </AlertDescription>
+          </Alert>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
 
 const DataManagement: React.FC = () => {
   const { exportData, importData, zones, affectationsTertiaires, affectationsOperationnelles } = useApp();
@@ -247,8 +309,11 @@ const DataManagement: React.FC = () => {
               <p className="text-sm text-muted-foreground">Affectations opérationnelles</p>
             </div>
           </div>
-        </CardContent>
+      </CardContent>
       </Card>
+
+      {/* Local Storage Usage Indicator */}
+      <StorageIndicator />
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Export Section */}
