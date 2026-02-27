@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import { ImagePlus, Image, X, Maximize2 } from "lucide-react";
+import { ImagePlus, Image, Maximize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   HoverCard,
@@ -13,47 +13,50 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { useBuildingPlanUrl } from "@/hooks/useBuildingPlanUrl";
+import { useApp } from "@/context/AppContext";
+import { toast } from "@/hooks/use-toast";
 
 interface BuildingPlanUploadProps {
   batiment: string;
-  planImage: string | undefined;
-  onUpload: (batiment: string, imageData: string) => void;
 }
 
 export const BuildingPlanUpload: React.FC<BuildingPlanUploadProps> = ({
   batiment,
-  planImage,
-  onUpload,
 }) => {
+  const { buildingPlanKeys, planRevision, uploadBuildingPlan } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
+
+  const hasPlan = buildingPlanKeys.has(batiment);
+  const planUrl = useBuildingPlanUrl(batiment, planRevision);
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith("image/")) return;
 
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
-      return;
+    try {
+      await uploadBuildingPlan(batiment, file);
+      toast({ title: "Plan mis à jour", description: `Image du bâtiment ${batiment} enregistrée.` });
+    } catch (err: any) {
+      if (err?.message === "IMAGE_TOO_LARGE") {
+        toast({
+          title: "Image trop volumineuse",
+          description: "Taille maximale autorisée : 180 Ko après compression.",
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Erreur", description: "Impossible de traiter l'image.", variant: "destructive" });
+      }
     }
 
-    // Read and convert to base64
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const imageData = event.target?.result as string;
-      onUpload(batiment, imageData);
-    };
-    reader.readAsDataURL(file);
-
-    // Reset input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleOpenFullscreen = (e: React.MouseEvent) => {
@@ -67,11 +70,11 @@ export const BuildingPlanUpload: React.FC<BuildingPlanUploadProps> = ({
       size="icon"
       className={cn(
         "h-7 w-7 shrink-0",
-        planImage ? "text-primary" : "text-muted-foreground"
+        hasPlan ? "text-primary" : "text-muted-foreground"
       )}
       onClick={handleClick}
     >
-      {planImage ? (
+      {hasPlan ? (
         <Image className="w-4 h-4" />
       ) : (
         <ImagePlus className="w-4 h-4" />
@@ -84,11 +87,11 @@ export const BuildingPlanUpload: React.FC<BuildingPlanUploadProps> = ({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/png,image/jpeg,image/jpg"
+        accept="image/png,image/jpeg,image/jpg,image/webp"
         className="hidden"
         onChange={handleFileChange}
       />
-      {planImage ? (
+      {hasPlan && planUrl ? (
         <>
           <HoverCard openDelay={200} closeDelay={100}>
             <HoverCardTrigger asChild>{buttonContent}</HoverCardTrigger>
@@ -113,7 +116,7 @@ export const BuildingPlanUpload: React.FC<BuildingPlanUploadProps> = ({
                   </Button>
                 </div>
                 <img
-                  src={planImage}
+                  src={planUrl}
                   alt={`Plan ${batiment}`}
                   className="w-full h-auto rounded-md border border-border cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={handleOpenFullscreen}
@@ -125,7 +128,6 @@ export const BuildingPlanUpload: React.FC<BuildingPlanUploadProps> = ({
             </HoverCardContent>
           </HoverCard>
 
-          {/* Fullscreen Dialog */}
           <Dialog open={isFullscreenOpen} onOpenChange={setIsFullscreenOpen}>
             <DialogContent 
               className="max-w-[95vw] max-h-[95vh] w-auto h-auto p-0 overflow-hidden"
@@ -138,7 +140,7 @@ export const BuildingPlanUpload: React.FC<BuildingPlanUploadProps> = ({
               </DialogHeader>
               <div className="flex items-center justify-center p-4 pt-16 max-h-[95vh] overflow-auto">
                 <img
-                  src={planImage}
+                  src={planUrl}
                   alt={`Plan ${batiment}`}
                   className="max-w-full max-h-[85vh] object-contain rounded-md"
                 />

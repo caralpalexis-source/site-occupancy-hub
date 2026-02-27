@@ -35,7 +35,6 @@ import { toast } from "@/hooks/use-toast";
 
 const STORAGE_LIMIT_BYTES = 5 * 1024 * 1024; // 5 Mo
 const STORAGE_KEY = "site-management-data";
-const BUILDING_PLANS_KEY = "site-management-building-plans";
 
 const getLocalStorageSize = (): number => {
   let total = 0;
@@ -46,12 +45,6 @@ const getLocalStorageSize = (): number => {
     }
   }
   return total;
-};
-
-const getKeySize = (key: string): number => {
-  const val = localStorage.getItem(key);
-  if (!val) return 0;
-  return (key.length + val.length) * 2;
 };
 
 const getCategorySize = (key: string, field?: string): number => {
@@ -67,8 +60,9 @@ const getCategorySize = (key: string, field?: string): number => {
   }
 };
 
-const StorageIndicator: React.FC = () => {
+const StorageIndicator: React.FC<{ plansSize: number }> = ({ plansSize }) => {
   const usedBytes = getLocalStorageSize();
+  const totalWithPlans = usedBytes + plansSize;
   const usedKo = usedBytes / 1024;
   const limitKo = STORAGE_LIMIT_BYTES / 1024;
   const percentage = Math.min((usedBytes / STORAGE_LIMIT_BYTES) * 100, 100);
@@ -76,7 +70,6 @@ const StorageIndicator: React.FC = () => {
   const zonesSize = getCategorySize(STORAGE_KEY, "zones");
   const tertiaireSize = getCategorySize(STORAGE_KEY, "affectationsTertiaires");
   const operationnelleSize = getCategorySize(STORAGE_KEY, "affectationsOperationnelles");
-  const plansSize = getKeySize(BUILDING_PLANS_KEY);
 
   const formatSize = (bytes: number) => {
     const ko = bytes / 1024;
@@ -90,7 +83,7 @@ const StorageIndicator: React.FC = () => {
     { label: "Zones", size: zonesSize },
     { label: "Affectations tertiaires", size: tertiaireSize },
     { label: "Affectations opérationnelles", size: operationnelleSize },
-    { label: "Plans bâtiments", size: plansSize },
+    { label: "Plans bâtiments (IndexedDB)", size: plansSize },
   ];
 
   return (
@@ -141,7 +134,7 @@ const StorageIndicator: React.FC = () => {
             <Separator className="my-1" />
             <div className="flex justify-between items-center text-sm font-semibold">
               <span>Total</span>
-              <span className="font-mono">{formatSize(usedBytes)}</span>
+              <span className="font-mono">{formatSize(totalWithPlans)}</span>
             </div>
           </div>
         </div>
@@ -158,6 +151,14 @@ const DataManagement: React.FC = () => {
   const excelInputRef = useRef<HTMLInputElement>(null);
   const [excelExportOpen, setExcelExportOpen] = useState(false);
   const [excelExportDate, setExcelExportDate] = useState<Date>(new Date());
+  const [plansSize, setPlansSize] = useState(0);
+
+  // Load IndexedDB plans size
+  React.useEffect(() => {
+    import("@/lib/buildingPlanDB").then(({ getTotalPlansSize }) => {
+      getTotalPlansSize().then(setPlansSize);
+    });
+  }, []);
 
   const isActiveAtDate = (dateDebut: string, dateFin: string | undefined, date: Date): boolean => {
     const debut = new Date(dateDebut);
@@ -437,7 +438,7 @@ const DataManagement: React.FC = () => {
       </Card>
 
       {/* Local Storage Usage Indicator */}
-      <StorageIndicator />
+      <StorageIndicator plansSize={plansSize} />
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Export Section */}

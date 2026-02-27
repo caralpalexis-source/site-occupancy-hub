@@ -6,9 +6,9 @@ import {
   AppData,
   OccupationStats,
 } from "@/types";
+import { saveBuildingPlan, compressImage, getAllBuildingPlanKeys } from "@/lib/buildingPlanDB";
 
 const STORAGE_KEY = "site-management-data";
-const BUILDING_PLANS_KEY = "site-management-building-plans";
 
 interface AppContextType {
   zones: Zone[];
@@ -36,9 +36,10 @@ interface AppContextType {
   getOccupationForZone: (zoneId: string, date: Date) => OccupationStats;
   getBatiments: () => string[];
   
-  // Building plans
-  buildingPlans: Record<string, string>;
-  setBuildingPlan: (batiment: string, imageData: string) => void;
+  // Building plans (IndexedDB)
+  buildingPlanKeys: Set<string>;
+  planRevision: number;
+  uploadBuildingPlan: (batiment: string, file: File) => Promise<void>;
   
   // Import/Export
   exportData: () => AppData;
@@ -60,7 +61,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [affectationsTertiaires, setAffectationsTertiaires] = useState<AffectationTertiaire[]>([]);
   const [affectationsOperationnelles, setAffectationsOperationnelles] = useState<AffectationOperationnelle[]>([]);
   const [dateEtat, setDateEtat] = useState<Date>(new Date());
-  const [buildingPlans, setBuildingPlans] = useState<Record<string, string>>({});
+  const [buildingPlanKeys, setBuildingPlanKeys] = useState<Set<string>>(new Set());
+  const [planRevision, setPlanRevision] = useState(0);
 
   // Sanitize zone_id: convert "INCONNUE" to undefined
   const sanitizeZoneId = (zoneId?: string): string | undefined => {
@@ -100,14 +102,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
     
-    // Load building plans separately
-    const storedPlans = localStorage.getItem(BUILDING_PLANS_KEY);
-    if (storedPlans) {
-      try {
-        setBuildingPlans(JSON.parse(storedPlans));
-      } catch (e) {
-        console.error("Error parsing building plans:", e);
-      }
+    // Load building plan keys from IndexedDB
+    getAllBuildingPlanKeys().then((keys) => {
+      setBuildingPlanKeys(new Set(keys));
+    });
+
+    // Migrate: remove old localStorage building plans if present
+    const oldPlansKey = "site-management-building-plans";
+    if (localStorage.getItem(oldPlansKey)) {
+      localStorage.removeItem(oldPlansKey);
     }
   }, []);
 
@@ -220,12 +223,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return [...new Set(zones.map((z) => z.batiment))];
   }, [zones]);
 
-  const setBuildingPlan = useCallback((batiment: string, imageData: string) => {
-    setBuildingPlans((prev) => {
-      const updated = { ...prev, [batiment]: imageData };
-      localStorage.setItem(BUILDING_PLANS_KEY, JSON.stringify(updated));
-      return updated;
-    });
+  const uploadBuildingPlan = useCallback(async (batiment: string, file: File) => {
+    const blob = await compressImage(file);
+    await saveBuildingPlan(batiment, blob);
+    setBuildingPlanKeys((prev) => new Set(prev).add(batiment));
+    setPlanRevision((r) => r + 1);
   }, []);
 
   const exportData = useCallback((): AppData => {
@@ -265,8 +267,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteAffectationOperationnelle,
         getOccupationForZone,
         getBatiments,
-        buildingPlans,
-        setBuildingPlan,
+        buildingPlanKeys,
+        planRevision,
+        uploadBuildingPlan,
         exportData,
         importData,
       }}
