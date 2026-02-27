@@ -45,8 +45,6 @@ const Dashboard: React.FC = () => {
     setDateEtat,
     getOccupationForZone,
     getBatiments,
-    buildingPlans,
-    setBuildingPlan,
     updateAffectationOperationnelle,
     addAffectationOperationnelle,
     addAffectationTertiaire,
@@ -370,7 +368,7 @@ const Dashboard: React.FC = () => {
                       <div className="flex-1">
                         <BuildingSummary batiment={batiment} zonesCount={batimentStats.zonesCount} occupationTertiaire={batimentStats.occupationTertiaire} occupationOperationnelle={batimentStats.occupationOperationnelle} tauxMoyen={batimentStats.tauxMoyen} />
                       </div>
-                      <BuildingPlanUpload batiment={batiment} planImage={buildingPlans[batiment]} onUpload={setBuildingPlan} />
+                      <BuildingPlanUpload batiment={batiment} />
                     </div>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
