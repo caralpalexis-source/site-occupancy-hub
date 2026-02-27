@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
+import { isActiveAtDate, getTertiaireKey } from "@/hooks/useDoubleAffectations";
 import { AffectationTertiaire, AffectationOperationnelle, STATUTS_TERTIAIRE } from "@/types";
 import {
   Select,
@@ -45,7 +46,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Plus, Pencil, Trash2, Users, Maximize, Calendar, Search, ChevronDown, ChevronRight, AlertTriangle } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, Maximize, Calendar, Search, ChevronDown, ChevronRight, AlertTriangle, Info } from "lucide-react";
 import { ServicePieChart } from "@/components/ServicePieChart";
 import { TimelineView } from "@/components/TimelineView";
 import { format } from "date-fns";
@@ -109,6 +110,30 @@ const Affectations: React.FC = () => {
   const zonesTertiaires = zones.filter((z) => z.type === "tertiaire");
   const zonesOperationnelles = zones.filter((z) => z.type === "operationnelle");
 
+  // === FILTRE PAR DATE D'ÉTAT : seules les affectations actives ===
+  const activeTertiaires = useMemo(() => 
+    affectationsTertiaires.filter((a) => isActiveAtDate(a.date_debut, a.date_fin, dateEtat)),
+    [affectationsTertiaires, dateEtat]
+  );
+
+  const activeOperationnelles = useMemo(() =>
+    affectationsOperationnelles.filter((a) => isActiveAtDate(a.date_debut, a.date_fin, dateEtat)),
+    [affectationsOperationnelles, dateEtat]
+  );
+
+  // === DÉDUPLICATION tertiaires par personne (clé nom+prénom), garder date_debut la plus récente ===
+  const deduplicatedTertiaires = useMemo(() => {
+    const byPerson = new Map<string, AffectationTertiaire>();
+    activeTertiaires.forEach((a) => {
+      const key = getTertiaireKey(a);
+      const existing = byPerson.get(key);
+      if (!existing || new Date(a.date_debut) > new Date(existing.date_debut)) {
+        byPerson.set(key, a);
+      }
+    });
+    return Array.from(byPerson.values());
+  }, [activeTertiaires]);
+
   const doubles = useDoubleAffectations(affectationsTertiaires, affectationsOperationnelles, dateEtat);
   const totalDoubles = doubles.totalTertiaires + doubles.totalOperationnelles;
   const { tertiaireIds: doubleTertiaireIds, operationnelleIds: doubleOpIds } = useDoubleAffectationIds(affectationsTertiaires, affectationsOperationnelles, dateEtat);
@@ -159,11 +184,11 @@ const Affectations: React.FC = () => {
     return text.toLowerCase().includes(searchQuery.toLowerCase().trim());
   };
 
-  // Filter tertiaire affectations based on search
+  // Filter tertiaire affectations based on search (using deduplicated active list)
   const filteredAffectationsTertiaires = useMemo(() => {
-    if (!searchQuery.trim()) return affectationsTertiaires;
+    if (!searchQuery.trim()) return deduplicatedTertiaires;
     
-    return affectationsTertiaires.filter((aff) => {
+    return deduplicatedTertiaires.filter((aff) => {
       const fullName = `${aff.nom} ${aff.prenom}`;
       const zoneName = getZoneName(aff.zone_id);
       const statut = aff.statut || "Titulaire";
@@ -174,9 +199,9 @@ const Affectations: React.FC = () => {
         matchesSearch(statut)
       );
     });
-  }, [affectationsTertiaires, searchQuery, zones]);
+  }, [deduplicatedTertiaires, searchQuery, zones]);
 
-  // Statut distribution based on filtered tertiaires
+  // Statut distribution based on filtered tertiaires (personnes distinctes)
   const statutDistribution = useMemo(() => {
     const total = filteredAffectationsTertiaires.length;
     if (total === 0) return null;
@@ -190,18 +215,18 @@ const Affectations: React.FC = () => {
       .map(([statut, count]) => ({ statut, count, pct: Math.round((count / total) * 100) }));
   }, [filteredAffectationsTertiaires]);
 
-  // Filter operationnelle affectations based on search
+  // Filter operationnelle affectations based on search (using active list)
   const filteredAffectationsOperationnelles = useMemo(() => {
-    if (!searchQuery.trim()) return affectationsOperationnelles;
+    if (!searchQuery.trim()) return activeOperationnelles;
     
-    return affectationsOperationnelles.filter((aff) => {
+    return activeOperationnelles.filter((aff) => {
       const zoneName = getZoneName(aff.zone_id);
       return (
         matchesSearch(aff.nom_projet) ||
         matchesSearch(zoneName)
       );
     });
-  }, [affectationsOperationnelles, searchQuery, zones]);
+  }, [activeOperationnelles, searchQuery, zones]);
 
   // Sort function for tertiaire
   const sortTertiaireList = (list: AffectationTertiaire[]) => {
@@ -340,6 +365,22 @@ const Affectations: React.FC = () => {
     if (editingTertiaire) {
       updateAffectationTertiaire({ ...data, id: editingTertiaire.id });
     } else {
+      // Auto-close existing active affectations for same person
+      const newKey = `${data.nom.trim().toLowerCase()}|${data.prenom.trim().toLowerCase()}`;
+      const newDebut = new Date(data.date_debut);
+      affectationsTertiaires.forEach((existing) => {
+        if (existing.id === editingTertiaire?.id) return;
+        const existingKey = getTertiaireKey(existing);
+        if (existingKey === newKey && isActiveAtDate(existing.date_debut, existing.date_fin, newDebut)) {
+          // Clôturer l'ancienne : date_fin = veille de la nouvelle date_debut
+          const veille = new Date(newDebut);
+          veille.setDate(veille.getDate() - 1);
+          updateAffectationTertiaire({
+            ...existing,
+            date_fin: veille.toISOString().split("T")[0],
+          });
+        }
+      });
       addAffectationTertiaire(data);
     }
     handleTertiaireOpenChange(false);
@@ -476,6 +517,17 @@ const Affectations: React.FC = () => {
           </p>
         </div>
         <TimelineView />
+      </div>
+
+      {/* Date d'état banner */}
+      <div className="mb-6 flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+        <Info className="h-4 w-4 text-primary shrink-0" />
+        <span className="text-sm font-medium text-foreground">
+          Données affichées à la date d'état : <span className="font-bold text-primary">{format(dateEtat, "dd/MM/yyyy", { locale: fr })}</span>
+        </span>
+        <span className="text-xs text-muted-foreground ml-2">
+          ({deduplicatedTertiaires.length} personne{deduplicatedTertiaires.length > 1 ? "s" : ""} distincte{deduplicatedTertiaires.length > 1 ? "s" : ""} · {activeOperationnelles.length} projet{activeOperationnelles.length > 1 ? "s" : ""})
+        </span>
       </div>
 
       {/* Double affectation warning */}
