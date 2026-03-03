@@ -2,6 +2,7 @@ import React from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { Building2, Map, Users, Database, LayoutDashboard, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ScenarioBanner } from "@/components/ScenarioBanner";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -63,8 +64,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto">
-        {children}
+      <main className="flex-1 overflow-auto flex flex-col">
+        <ScenarioBanner />
+        <div className="flex-1 overflow-auto">
+          {children}
+        </div>
       </main>
     </div>
   );

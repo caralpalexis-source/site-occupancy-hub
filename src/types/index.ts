@@ -38,6 +38,13 @@ export interface AppData {
   affectationsOperationnelles: AffectationOperationnelle[];
 }
 
+export interface Scenario {
+  id: string;
+  nom: string;
+  dateCreation: string;
+  data: AppData;
+}
+
 export interface OccupationStats {
   occupation: number;
   capacite_max: number;
