@@ -5,10 +5,12 @@ import {
   AffectationOperationnelle,
   AppData,
   OccupationStats,
+  Scenario,
 } from "@/types";
 import { saveBuildingPlan, compressImage, getAllBuildingPlanKeys } from "@/lib/buildingPlanDB";
 
 const STORAGE_KEY = "site-management-data";
+const SCENARIOS_KEY = "site-management-scenarios";
 
 interface AppContextType {
   zones: Zone[];
@@ -44,6 +46,17 @@ interface AppContextType {
   // Import/Export
   exportData: () => AppData;
   importData: (data: AppData) => void;
+
+  // Scenarios
+  scenarios: Scenario[];
+  activeScenario: Scenario | null;
+  createScenario: (nom: string) => void;
+  deleteScenario: (id: string) => void;
+  activateScenario: (id: string) => void;
+  saveActiveScenario: () => void;
+  discardActiveScenario: () => void;
+  promoteActiveScenario: () => void;
+  promoteScenario: (id: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -56,6 +69,12 @@ const defaultData: AppData = {
   affectationsOperationnelles: [],
 };
 
+// Sanitize zone_id: convert "INCONNUE" to undefined
+const sanitizeZoneId = (zoneId?: string): string | undefined => {
+  if (!zoneId || zoneId === "INCONNUE") return undefined;
+  return zoneId;
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [zones, setZones] = useState<Zone[]>([]);
   const [affectationsTertiaires, setAffectationsTertiaires] = useState<AffectationTertiaire[]>([]);
@@ -64,11 +83,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [buildingPlanKeys, setBuildingPlanKeys] = useState<Set<string>>(new Set());
   const [planRevision, setPlanRevision] = useState(0);
 
-  // Sanitize zone_id: convert "INCONNUE" to undefined
-  const sanitizeZoneId = (zoneId?: string): string | undefined => {
-    if (!zoneId || zoneId === "INCONNUE") return undefined;
-    return zoneId;
-  };
+  // Scenario state
+  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [activeScenario, setActiveScenario] = useState<Scenario | null>(null);
+  // Store nominal data while scenario is active
+  const [nominalData, setNominalData] = useState<AppData | null>(null);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -76,12 +95,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (stored) {
       try {
         const data: AppData = JSON.parse(stored);
-        // Remove any zone named "INCONNUE"
         const cleanedZones = (data.zones || []).filter(
           (z) => z.nom_zone.toLowerCase() !== "inconnue"
         );
         setZones(cleanedZones);
-        // Clean up any "INCONNUE" zone_id values and remove references to deleted INCONNUE zones
         const inconnueZoneIds = new Set(
           (data.zones || []).filter((z) => z.nom_zone.toLowerCase() === "inconnue").map((z) => z.id)
         );
@@ -101,28 +118,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.error("Error parsing stored data:", e);
       }
     }
+
+    // Load scenarios
+    const storedScenarios = localStorage.getItem(SCENARIOS_KEY);
+    if (storedScenarios) {
+      try {
+        setScenarios(JSON.parse(storedScenarios));
+      } catch (e) {
+        console.error("Error parsing scenarios:", e);
+      }
+    }
     
-    // Load building plan keys from IndexedDB
     getAllBuildingPlanKeys().then((keys) => {
       setBuildingPlanKeys(new Set(keys));
     });
 
-    // Migrate: remove old localStorage building plans if present
     const oldPlansKey = "site-management-building-plans";
     if (localStorage.getItem(oldPlansKey)) {
       localStorage.removeItem(oldPlansKey);
     }
   }, []);
 
-  // Save to localStorage on changes
+  // Save nominal data to localStorage (only when no scenario is active)
   useEffect(() => {
+    if (activeScenario) return; // Don't persist scenario data as nominal
     const data: AppData = {
       zones,
       affectationsTertiaires,
       affectationsOperationnelles,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, [zones, affectationsTertiaires, affectationsOperationnelles]);
+  }, [zones, affectationsTertiaires, affectationsOperationnelles, activeScenario]);
+
+  // Save scenarios list to localStorage
+  useEffect(() => {
+    localStorage.setItem(SCENARIOS_KEY, JSON.stringify(scenarios));
+  }, [scenarios]);
 
   // Zone CRUD
   const addZone = useCallback((zone: Omit<Zone, "id">) => {
@@ -188,14 +219,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       let occupation = 0;
 
       if (zone.type === "tertiaire") {
-        // Deduplicate by nom+prenom
         const active = affectationsTertiaires.filter(
           (a) => a.zone_id === zoneId && isActiveAtDate(a.date_debut, a.date_fin, date)
         );
         const unique = new Set(active.map((a) => `${a.nom.trim().toLowerCase()}|${a.prenom.trim().toLowerCase()}`));
         occupation = unique.size;
       } else {
-        // Deduplicate by nom_projet, take max surface per project
         const active = affectationsOperationnelles.filter(
           (a) => a.zone_id === zoneId && isActiveAtDate(a.date_debut, a.date_fin, date)
         );
@@ -231,11 +260,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const exportData = useCallback((): AppData => {
-    return {
-      zones,
-      affectationsTertiaires,
-      affectationsOperationnelles,
-    };
+    return { zones, affectationsTertiaires, affectationsOperationnelles };
   }, [zones, affectationsTertiaires, affectationsOperationnelles]);
 
   const importData = useCallback((data: AppData) => {
@@ -247,6 +272,95 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       data.affectationsOperationnelles.map((a) => ({ ...a, zone_id: sanitizeZoneId(a.zone_id) }))
     );
   }, []);
+
+  // === Scenario management ===
+
+  const createScenario = useCallback((nom: string) => {
+    const currentData: AppData = {
+      zones: structuredClone(zones),
+      affectationsTertiaires: structuredClone(affectationsTertiaires),
+      affectationsOperationnelles: structuredClone(affectationsOperationnelles),
+    };
+    const scenario: Scenario = {
+      id: generateId(),
+      nom,
+      dateCreation: new Date().toISOString(),
+      data: currentData,
+    };
+    // Save nominal and switch to scenario data
+    setNominalData(currentData);
+    setActiveScenario(scenario);
+    // The working data is already the current data (deep cloned into scenario)
+  }, [zones, affectationsTertiaires, affectationsOperationnelles]);
+
+  const deleteScenario = useCallback((id: string) => {
+    setScenarios((prev) => prev.filter((s) => s.id !== id));
+  }, []);
+
+  const activateScenario = useCallback((id: string) => {
+    const scenario = scenarios.find((s) => s.id === id);
+    if (!scenario) return;
+    // Save current nominal
+    setNominalData({
+      zones: structuredClone(zones),
+      affectationsTertiaires: structuredClone(affectationsTertiaires),
+      affectationsOperationnelles: structuredClone(affectationsOperationnelles),
+    });
+    // Load scenario data into working state
+    const data = structuredClone(scenario.data);
+    setZones(data.zones);
+    setAffectationsTertiaires(data.affectationsTertiaires);
+    setAffectationsOperationnelles(data.affectationsOperationnelles);
+    setActiveScenario({ ...scenario });
+    // Remove from saved list (it's now active)
+    setScenarios((prev) => prev.filter((s) => s.id !== id));
+  }, [scenarios, zones, affectationsTertiaires, affectationsOperationnelles]);
+
+  const restoreNominal = useCallback(() => {
+    if (!nominalData) return;
+    setZones(nominalData.zones);
+    setAffectationsTertiaires(nominalData.affectationsTertiaires);
+    setAffectationsOperationnelles(nominalData.affectationsOperationnelles);
+    setNominalData(null);
+    setActiveScenario(null);
+  }, [nominalData]);
+
+  const saveActiveScenario = useCallback(() => {
+    if (!activeScenario) return;
+    // Save current working state into the scenario
+    const savedScenario: Scenario = {
+      ...activeScenario,
+      data: {
+        zones: structuredClone(zones),
+        affectationsTertiaires: structuredClone(affectationsTertiaires),
+        affectationsOperationnelles: structuredClone(affectationsOperationnelles),
+      },
+    };
+    setScenarios((prev) => [...prev, savedScenario]);
+    restoreNominal();
+  }, [activeScenario, zones, affectationsTertiaires, affectationsOperationnelles, restoreNominal]);
+
+  const discardActiveScenario = useCallback(() => {
+    restoreNominal();
+  }, [restoreNominal]);
+
+  const promoteActiveScenario = useCallback(() => {
+    if (!activeScenario) return;
+    // Current working state IS the scenario data — just keep it and discard nominal
+    setNominalData(null);
+    setActiveScenario(null);
+    // Data already in state, will be persisted via useEffect
+  }, [activeScenario]);
+
+  const promoteScenario = useCallback((id: string) => {
+    const scenario = scenarios.find((s) => s.id === id);
+    if (!scenario) return;
+    const data = structuredClone(scenario.data);
+    setZones(data.zones);
+    setAffectationsTertiaires(data.affectationsTertiaires);
+    setAffectationsOperationnelles(data.affectationsOperationnelles);
+    setScenarios((prev) => prev.filter((s) => s.id !== id));
+  }, [scenarios]);
 
   return (
     <AppContext.Provider
@@ -272,6 +386,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         uploadBuildingPlan,
         exportData,
         importData,
+        scenarios,
+        activeScenario,
+        createScenario,
+        deleteScenario,
+        activateScenario,
+        saveActiveScenario,
+        discardActiveScenario,
+        promoteActiveScenario,
+        promoteScenario,
       }}
     >
       {children}

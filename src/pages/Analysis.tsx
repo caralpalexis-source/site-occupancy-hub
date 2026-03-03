@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScenarioList } from "@/components/ScenarioList";
 import { DatePicker } from "@/components/DatePicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -489,6 +491,18 @@ const Analysis: React.FC = () => {
           Outils d'aide à la décision pour la gestion des surfaces
         </p>
       </div>
+
+      <Tabs defaultValue="analyse" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="analyse">Analyse</TabsTrigger>
+          <TabsTrigger value="scenarios">Scénarios</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="scenarios">
+          <ScenarioList />
+        </TabsContent>
+
+        <TabsContent value="analyse">
 
       {/* Period Selection */}
       <Card className="mb-8">
@@ -1100,6 +1114,8 @@ const Analysis: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </TabsContent>
+    </Tabs>
     </div>
   );
 };
