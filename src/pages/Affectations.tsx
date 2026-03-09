@@ -56,6 +56,7 @@ import { FormDatePicker } from "@/components/FormDatePicker";
 import { ExcelUploadTertiaire } from "@/components/ExcelUploadTertiaire";
 import { useDoubleAffectations, useDoubleAffectationIds } from "@/hooks/useDoubleAffectations";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { ChangeAffectationDialog } from "@/components/ChangeAffectationDialog";
 import {
   Tooltip,
   TooltipContent,
