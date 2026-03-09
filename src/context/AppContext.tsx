@@ -505,6 +505,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteAffectationOperationnelle,
         getOccupationForZone,
         getBatiments,
+        changeAffectationTertiaireZone,
+        changeAffectationOperationnelleZone,
         buildingPlanKeys,
         planRevision,
         uploadBuildingPlan,
