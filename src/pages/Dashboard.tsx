@@ -45,10 +45,8 @@ const Dashboard: React.FC = () => {
     setDateEtat,
     getOccupationForZone,
     getBatiments,
-    updateAffectationOperationnelle,
-    addAffectationOperationnelle,
-    addAffectationTertiaire,
-    updateAffectationTertiaire,
+    changeAffectationTertiaireZone,
+    changeAffectationOperationnelleZone,
   } = useApp();
 
   const [filter, setFilter] = useState<ZoneFilterType>("all");
