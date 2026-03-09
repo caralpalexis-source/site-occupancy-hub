@@ -12,6 +12,15 @@ export interface Zone {
 export const STATUTS_TERTIAIRE = ["Titulaire", "Prestataire", "Intérimaire", "Alternant"] as const;
 export type StatutTertiaire = typeof STATUTS_TERTIAIRE[number];
 
+export const CHANGE_REASONS = [
+  "Mutation interne",
+  "Réorganisation d'équipe",
+  "Nouvelle arrivée",
+  "Départ",
+  "Correction administrative",
+] as const;
+export type ChangeReason = typeof CHANGE_REASONS[number];
+
 export interface AffectationTertiaire {
   id: string;
   nom: string;
@@ -21,6 +30,7 @@ export interface AffectationTertiaire {
   zone_id?: string;
   date_debut: string;
   date_fin?: string;
+  change_reason?: string;
 }
 
 export interface AffectationOperationnelle {

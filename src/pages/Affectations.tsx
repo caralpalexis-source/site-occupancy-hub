@@ -46,7 +46,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Plus, Pencil, Trash2, Users, Maximize, Calendar, Search, ChevronDown, ChevronRight, AlertTriangle, Info } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, Maximize, Calendar, Search, ChevronDown, ChevronRight, AlertTriangle, Info, ArrowRightLeft } from "lucide-react";
 import { ServicePieChart } from "@/components/ServicePieChart";
 import { TimelineView } from "@/components/TimelineView";
 import { format } from "date-fns";
@@ -56,6 +56,7 @@ import { FormDatePicker } from "@/components/FormDatePicker";
 import { ExcelUploadTertiaire } from "@/components/ExcelUploadTertiaire";
 import { useDoubleAffectations, useDoubleAffectationIds } from "@/hooks/useDoubleAffectations";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { ChangeAffectationDialog } from "@/components/ChangeAffectationDialog";
 import {
   Tooltip,
   TooltipContent,
@@ -151,6 +152,7 @@ const Affectations: React.FC = () => {
   // Tertiaire form state
   const [isTertiaireOpen, setIsTertiaireOpen] = useState(false);
   const [editingTertiaire, setEditingTertiaire] = useState<AffectationTertiaire | null>(null);
+  const [changingAffectation, setChangingAffectation] = useState<AffectationTertiaire | null>(null);
   const [tertiaireForm, setTertiaireForm] = useState({
     nom: "",
     prenom: "",
@@ -433,6 +435,36 @@ const Affectations: React.FC = () => {
     handleOperationnelleOpenChange(false);
   };
 
+  const handleChangeAffectation = (params: {
+    currentAff: AffectationTertiaire;
+    changeDate: string;
+    newService: string;
+    newStatut: string;
+    newZoneId?: string;
+    newDateFin?: string;
+    changeReason?: string;
+  }) => {
+    const { currentAff, changeDate, newService, newStatut, newZoneId, newDateFin, changeReason } = params;
+    // Close current assignment: end_date = changeDate - 1
+    const veille = new Date(changeDate);
+    veille.setDate(veille.getDate() - 1);
+    updateAffectationTertiaire({
+      ...currentAff,
+      date_fin: veille.toISOString().split("T")[0],
+    });
+    // Create new assignment starting at changeDate
+    addAffectationTertiaire({
+      nom: currentAff.nom,
+      prenom: currentAff.prenom,
+      service: newService,
+      statut: (newStatut || "Titulaire") as any,
+      zone_id: newZoneId,
+      date_debut: changeDate,
+      date_fin: newDateFin,
+      change_reason: changeReason,
+    });
+  };
+
   const formatDate = (dateStr: string) => {
     return format(new Date(dateStr), "d MMM yyyy", { locale: fr });
   };
@@ -473,7 +505,17 @@ const Affectations: React.FC = () => {
         </div>
       </TableCell>
       <TableCell className="text-right">
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-1">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button size="sm" variant="ghost" onClick={() => setChangingAffectation(aff)}>
+                  <ArrowRightLeft className="w-4 h-4 text-primary" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent><p>Changer d'affectation</p></TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <Button size="sm" variant="ghost" onClick={() => handleEditTertiaire(aff)}>
             <Pencil className="w-4 h-4" />
           </Button>
@@ -974,6 +1016,18 @@ const Affectations: React.FC = () => {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Change Affectation Dialog */}
+      {changingAffectation && (
+        <ChangeAffectationDialog
+          affectation={changingAffectation}
+          zones={zonesTertiaires}
+          open={!!changingAffectation}
+          onOpenChange={(open) => { if (!open) setChangingAffectation(null); }}
+          onConfirm={handleChangeAffectation}
+          getZoneName={getZoneName}
+        />
+      )}
     </div>
   );
 };
