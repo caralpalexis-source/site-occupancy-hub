@@ -505,7 +505,17 @@ const Affectations: React.FC = () => {
         </div>
       </TableCell>
       <TableCell className="text-right">
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-1">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button size="sm" variant="ghost" onClick={() => setChangingAffectation(aff)}>
+                  <ArrowRightLeft className="w-4 h-4 text-primary" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent><p>Changer d'affectation</p></TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <Button size="sm" variant="ghost" onClick={() => handleEditTertiaire(aff)}>
             <Pencil className="w-4 h-4" />
           </Button>
