@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/sonner";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -27,6 +28,7 @@ export const ScenarioBanner: React.FC = () => {
   const handleDiscard = () => {
     discardActiveScenario();
     setShowExitDialog(false);
+    toast.info("Modifications annulées — le scénario enregistré reste inchangé.");
   };
 
   const handlePromote = () => {

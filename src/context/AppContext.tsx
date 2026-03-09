@@ -436,8 +436,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAffectationsTertiaires(data.affectationsTertiaires);
     setAffectationsOperationnelles(data.affectationsOperationnelles);
     setActiveScenario({ ...scenario });
-    // Remove from saved list (it's now active)
-    setScenarios((prev) => prev.filter((s) => s.id !== id));
+    // Keep scenario in saved list — it will be updated on save or left intact on discard
   }, [scenarios, zones, affectationsTertiaires, affectationsOperationnelles]);
 
   const restoreNominal = useCallback(() => {
@@ -451,7 +450,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const saveActiveScenario = useCallback(() => {
     if (!activeScenario) return;
-    // Save current working state into the scenario
+    // Save current working state into the scenario, replacing existing entry
     const savedScenario: Scenario = {
       ...activeScenario,
       data: {
@@ -460,11 +459,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         affectationsOperationnelles: structuredClone(affectationsOperationnelles),
       },
     };
-    setScenarios((prev) => [...prev, savedScenario]);
+    setScenarios((prev) => {
+      const exists = prev.some((s) => s.id === savedScenario.id);
+      if (exists) {
+        return prev.map((s) => (s.id === savedScenario.id ? savedScenario : s));
+      }
+      return [...prev, savedScenario];
+    });
     restoreNominal();
   }, [activeScenario, zones, affectationsTertiaires, affectationsOperationnelles, restoreNominal]);
 
   const discardActiveScenario = useCallback(() => {
+    // Restore nominal data — the saved scenario in the list remains untouched
     restoreNominal();
   }, [restoreNominal]);
 
