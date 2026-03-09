@@ -1016,6 +1016,18 @@ const Affectations: React.FC = () => {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Change Affectation Dialog */}
+      {changingAffectation && (
+        <ChangeAffectationDialog
+          affectation={changingAffectation}
+          zones={zonesTertiaires}
+          open={!!changingAffectation}
+          onOpenChange={(open) => { if (!open) setChangingAffectation(null); }}
+          onConfirm={handleChangeAffectation}
+          getZoneName={getZoneName}
+        />
+      )}
     </div>
   );
 };
