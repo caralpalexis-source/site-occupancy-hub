@@ -106,6 +106,7 @@ const Affectations: React.FC = () => {
     addAffectationOperationnelle,
     updateAffectationOperationnelle,
     deleteAffectationOperationnelle,
+    changeAffectationTertiaireZone,
   } = useApp();
 
   const zonesTertiaires = zones.filter((z) => z.type === "tertiaire");
