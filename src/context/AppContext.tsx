@@ -436,8 +436,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAffectationsTertiaires(data.affectationsTertiaires);
     setAffectationsOperationnelles(data.affectationsOperationnelles);
     setActiveScenario({ ...scenario });
-    // Remove from saved list (it's now active)
-    setScenarios((prev) => prev.filter((s) => s.id !== id));
+    // Keep scenario in saved list — it will be updated on save or left intact on discard
   }, [scenarios, zones, affectationsTertiaires, affectationsOperationnelles]);
 
   const restoreNominal = useCallback(() => {
