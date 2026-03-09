@@ -22,24 +22,24 @@ import { format, addMonths, differenceInDays } from "date-fns";
 import { fr } from "date-fns/locale";
 import { MultiSelectDropdown } from "@/components/MultiSelectDropdown";
 
-const TIMELINE_COLORS = [
-  "hsl(210, 70%, 50%)",
-  "hsl(340, 70%, 50%)",
-  "hsl(150, 60%, 45%)",
-  "hsl(45, 80%, 50%)",
-  "hsl(270, 60%, 55%)",
-  "hsl(20, 75%, 50%)",
-  "hsl(180, 55%, 45%)",
-  "hsl(300, 50%, 55%)",
-  "hsl(100, 50%, 45%)",
-  "hsl(0, 60%, 50%)",
-];
+const ZOOM_OPTIONS = [1, 3, 6, 12, 24] as const;
+type ZoomLevel = (typeof ZOOM_OPTIONS)[number];
+
+/** Deterministic HSL color from a string key */
+function stableColor(key: string): string {
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) {
+    hash = key.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = ((hash % 360) + 360) % 360;
+  return `hsl(${hue}, 65%, 50%)`;
+}
 
 interface TimelineBar {
   label: string;
+  resourceKey: string;
   start: Date;
   end: Date;
-  colorIndex: number;
 }
 
 interface ZoneTimeline {
@@ -60,25 +60,25 @@ function isOverlapping(
 }
 
 export const TimelineView: React.FC = () => {
-  const {
-    zones,
-    affectationsTertiaires,
-    affectationsOperationnelles,
-  } = useApp();
+  const { zones, affectationsTertiaires, affectationsOperationnelles } = useApp();
 
   const [open, setOpen] = useState(false);
   const [selectedBatiments, setSelectedBatiments] = useState<string[]>([]);
   const [selectedZoneIds, setSelectedZoneIds] = useState<string[]>([]);
+  const [zoom, setZoom] = useState<ZoomLevel>(24);
 
-  // Initialize with all buildings selected when dialog opens
-  const handleOpenChange = useCallback((isOpen: boolean) => {
-    setOpen(isOpen);
-    if (isOpen) {
-      const allBats = [...new Set(zones.map((z) => z.batiment))];
-      setSelectedBatiments(allBats);
-      setSelectedZoneIds(zones.map((z) => z.id));
-    }
-  }, [zones]);
+  const handleOpenChange = useCallback(
+    (isOpen: boolean) => {
+      setOpen(isOpen);
+      if (isOpen) {
+        const allBats = [...new Set(zones.map((z) => z.batiment))];
+        setSelectedBatiments(allBats);
+        setSelectedZoneIds(zones.map((z) => z.id));
+        setZoom(24);
+      }
+    },
+    [zones]
+  );
 
   const batimentOptions = useMemo(
     () =>
@@ -95,16 +95,18 @@ export const TimelineView: React.FC = () => {
       .map((z) => ({ value: z.id, label: `${z.batiment} — ${z.nom_zone}` }));
   }, [zones, selectedBatiments]);
 
-  // When batiments change, remove zones that no longer belong
-  const handleBatimentsChange = useCallback((newBatiments: string[]) => {
-    setSelectedBatiments(newBatiments);
-    setSelectedZoneIds((prev) => {
-      const validZoneIds = new Set(
-        zones.filter((z) => newBatiments.includes(z.batiment)).map((z) => z.id)
-      );
-      return prev.filter((id) => validZoneIds.has(id));
-    });
-  }, [zones]);
+  const handleBatimentsChange = useCallback(
+    (newBatiments: string[]) => {
+      setSelectedBatiments(newBatiments);
+      setSelectedZoneIds((prev) => {
+        const validZoneIds = new Set(
+          zones.filter((z) => newBatiments.includes(z.batiment)).map((z) => z.id)
+        );
+        return prev.filter((id) => validZoneIds.has(id));
+      });
+    },
+    [zones]
+  );
 
   const filteredZones = useMemo(() => {
     return zones
@@ -117,57 +119,58 @@ export const TimelineView: React.FC = () => {
     d.setHours(0, 0, 0, 0);
     return d;
   }, []);
-  const windowEnd = useMemo(() => addMonths(windowStart, 24), [windowStart]);
+  const windowEnd = useMemo(() => addMonths(windowStart, zoom), [windowStart, zoom]);
   const totalDays = differenceInDays(windowEnd, windowStart);
 
   const zoneTimelines = useMemo<ZoneTimeline[]>(() => {
     return filteredZones.map((zone) => {
       const bars: TimelineBar[] = [];
-      let colorIdx = 0;
 
       if (zone.type === "tertiaire") {
-        const affs = affectationsTertiaires.filter(
-          (a) =>
-            a.zone_id === zone.id &&
-            isOverlapping(a.date_debut, a.date_fin, windowStart, windowEnd)
-        );
-        affs.forEach((a) => {
-          bars.push({
-            label: `${a.prenom} ${a.nom}`,
-            start: new Date(a.date_debut) < windowStart ? windowStart : new Date(a.date_debut),
-            end: a.date_fin
-              ? new Date(a.date_fin) > windowEnd
-                ? windowEnd
-                : new Date(a.date_fin)
-              : windowEnd,
-            colorIndex: colorIdx++,
+        affectationsTertiaires
+          .filter(
+            (a) =>
+              a.zone_id === zone.id &&
+              isOverlapping(a.date_debut, a.date_fin, windowStart, windowEnd)
+          )
+          .forEach((a) => {
+            const key = `${a.nom}|${a.prenom}`;
+            bars.push({
+              label: `${a.prenom} ${a.nom}`,
+              resourceKey: key,
+              start: new Date(a.date_debut) < windowStart ? windowStart : new Date(a.date_debut),
+              end: a.date_fin
+                ? new Date(a.date_fin) > windowEnd
+                  ? windowEnd
+                  : new Date(a.date_fin)
+                : windowEnd,
+            });
           });
-        });
       } else {
-        const affs = affectationsOperationnelles.filter(
-          (a) =>
-            a.zone_id === zone.id &&
-            isOverlapping(a.date_debut, a.date_fin, windowStart, windowEnd)
-        );
-        affs.forEach((a) => {
-          bars.push({
-            label: a.nom_projet,
-            start: new Date(a.date_debut) < windowStart ? windowStart : new Date(a.date_debut),
-            end: a.date_fin
-              ? new Date(a.date_fin) > windowEnd
-                ? windowEnd
-                : new Date(a.date_fin)
-              : windowEnd,
-            colorIndex: colorIdx++,
+        affectationsOperationnelles
+          .filter(
+            (a) =>
+              a.zone_id === zone.id &&
+              isOverlapping(a.date_debut, a.date_fin, windowStart, windowEnd)
+          )
+          .forEach((a) => {
+            bars.push({
+              label: a.nom_projet,
+              resourceKey: a.nom_projet,
+              start: new Date(a.date_debut) < windowStart ? windowStart : new Date(a.date_debut),
+              end: a.date_fin
+                ? new Date(a.date_fin) > windowEnd
+                  ? windowEnd
+                  : new Date(a.date_fin)
+                : windowEnd,
+            });
           });
-        });
       }
 
       return { zone, bars };
     });
   }, [filteredZones, affectationsTertiaires, affectationsOperationnelles, windowStart, windowEnd]);
 
-  // Generate month markers
   const monthMarkers = useMemo(() => {
     const markers: { label: string; offsetPercent: number }[] = [];
     let current = new Date(windowStart);
@@ -185,7 +188,9 @@ export const TimelineView: React.FC = () => {
     return markers;
   }, [windowStart, windowEnd, totalDays]);
 
-  const filtersActive = selectedBatiments.length < batimentOptions.length || selectedZoneIds.length < zoneOptions.length;
+  const filtersActive =
+    selectedBatiments.length < batimentOptions.length ||
+    selectedZoneIds.length < zoneOptions.length;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -198,14 +203,16 @@ export const TimelineView: React.FC = () => {
       <DialogContent className="sm:max-w-[95vw] h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
-            Timeline des mouvements — 24 mois
+            Timeline des mouvements — {zoom} mois
             {filtersActive && (
-              <Badge variant="secondary" className="text-[10px]">Filtres actifs</Badge>
+              <Badge variant="secondary" className="text-[10px]">
+                Filtres actifs
+              </Badge>
             )}
           </DialogTitle>
         </DialogHeader>
 
-        {/* Filters */}
+        {/* Filters + Zoom */}
         <div className="flex flex-wrap gap-4 items-end flex-shrink-0">
           <div className="space-y-1.5">
             <Label className="text-xs">Bâtiments</Label>
@@ -230,8 +237,28 @@ export const TimelineView: React.FC = () => {
               className="w-[240px]"
             />
           </div>
+
+          {/* Zoom buttons */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Zoom</Label>
+            <div className="flex gap-1">
+              {ZOOM_OPTIONS.map((z) => (
+                <Button
+                  key={z}
+                  size="sm"
+                  variant={zoom === z ? "default" : "outline"}
+                  className="h-8 px-2.5 text-xs"
+                  onClick={() => setZoom(z)}
+                >
+                  {z}m
+                </Button>
+              ))}
+            </div>
+          </div>
+
           <p className="text-xs text-muted-foreground ml-auto">
-            {format(windowStart, "d MMM yyyy", { locale: fr })} → {format(windowEnd, "d MMM yyyy", { locale: fr })}
+            {format(windowStart, "d MMM yyyy", { locale: fr })} →{" "}
+            {format(windowEnd, "d MMM yyyy", { locale: fr })}
           </p>
         </div>
 
@@ -248,17 +275,13 @@ export const TimelineView: React.FC = () => {
                     <span className="text-xs font-medium text-muted-foreground">
                       {zone.batiment}
                     </span>
-                    <span className="font-semibold text-sm text-foreground">
-                      {zone.nom_zone}
-                    </span>
+                    <span className="font-semibold text-sm text-foreground">{zone.nom_zone}</span>
                     <span className="text-xs text-muted-foreground">
                       ({zone.type === "tertiaire" ? `${zone.capacite_max} pers.` : `${zone.capacite_max} m²`})
                     </span>
                   </div>
 
-                  {/* Timeline track */}
                   <div className="relative bg-muted/40 rounded border border-border min-h-[40px]">
-                    {/* Month grid lines */}
                     {monthMarkers.map((m, i) => (
                       <div
                         key={i}
@@ -292,7 +315,7 @@ export const TimelineView: React.FC = () => {
                                     style={{
                                       marginLeft: `${leftPercent}%`,
                                       width: `${Math.min(widthPercent, 100 - leftPercent)}%`,
-                                      backgroundColor: TIMELINE_COLORS[bar.colorIndex % TIMELINE_COLORS.length],
+                                      backgroundColor: stableColor(bar.resourceKey),
                                     }}
                                   >
                                     <span className="text-[10px] font-medium text-white truncate">
@@ -303,7 +326,8 @@ export const TimelineView: React.FC = () => {
                                 <TooltipContent>
                                   <p className="font-medium">{bar.label}</p>
                                   <p className="text-xs text-muted-foreground">
-                                    {format(bar.start, "d MMM yyyy", { locale: fr })} → {format(bar.end, "d MMM yyyy", { locale: fr })}
+                                    {format(bar.start, "d MMM yyyy", { locale: fr })} →{" "}
+                                    {format(bar.end, "d MMM yyyy", { locale: fr })}
                                   </p>
                                 </TooltipContent>
                               </Tooltip>
