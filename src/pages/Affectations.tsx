@@ -46,7 +46,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Plus, Pencil, Trash2, Users, Maximize, Calendar, Search, ChevronDown, ChevronRight, AlertTriangle, Info } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, Maximize, Calendar, Search, ChevronDown, ChevronRight, AlertTriangle, Info, ArrowRightLeft } from "lucide-react";
 import { ServicePieChart } from "@/components/ServicePieChart";
 import { TimelineView } from "@/components/TimelineView";
 import { format } from "date-fns";
