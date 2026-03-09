@@ -152,6 +152,7 @@ const Affectations: React.FC = () => {
   // Tertiaire form state
   const [isTertiaireOpen, setIsTertiaireOpen] = useState(false);
   const [editingTertiaire, setEditingTertiaire] = useState<AffectationTertiaire | null>(null);
+  const [changingAffectation, setChangingAffectation] = useState<AffectationTertiaire | null>(null);
   const [tertiaireForm, setTertiaireForm] = useState({
     nom: "",
     prenom: "",
