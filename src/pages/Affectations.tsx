@@ -435,6 +435,36 @@ const Affectations: React.FC = () => {
     handleOperationnelleOpenChange(false);
   };
 
+  const handleChangeAffectation = (params: {
+    currentAff: AffectationTertiaire;
+    changeDate: string;
+    newService: string;
+    newStatut: string;
+    newZoneId?: string;
+    newDateFin?: string;
+    changeReason?: string;
+  }) => {
+    const { currentAff, changeDate, newService, newStatut, newZoneId, newDateFin, changeReason } = params;
+    // Close current assignment: end_date = changeDate - 1
+    const veille = new Date(changeDate);
+    veille.setDate(veille.getDate() - 1);
+    updateAffectationTertiaire({
+      ...currentAff,
+      date_fin: veille.toISOString().split("T")[0],
+    });
+    // Create new assignment starting at changeDate
+    addAffectationTertiaire({
+      nom: currentAff.nom,
+      prenom: currentAff.prenom,
+      service: newService,
+      statut: (newStatut || "Titulaire") as any,
+      zone_id: newZoneId,
+      date_debut: changeDate,
+      date_fin: newDateFin,
+      change_reason: changeReason,
+    });
+  };
+
   const formatDate = (dateStr: string) => {
     return format(new Date(dateStr), "d MMM yyyy", { locale: fr });
   };
