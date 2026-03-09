@@ -43,6 +43,10 @@ interface AppContextType {
   planRevision: number;
   uploadBuildingPlan: (batiment: string, file: File) => Promise<void>;
   
+  // Business logic for changing zone
+  changeAffectationTertiaireZone: (affId: string, newZoneId: string, changeDate: Date, changeReason?: string) => { success: boolean; error?: string; warning?: string };
+  changeAffectationOperationnelleZone: (affId: string, newZoneId: string, changeDate: Date) => { success: boolean; error?: string; warning?: string };
+
   // Import/Export
   exportData: () => AppData;
   importData: (data: AppData) => void;
