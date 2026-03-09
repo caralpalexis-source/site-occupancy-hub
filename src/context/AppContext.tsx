@@ -43,6 +43,10 @@ interface AppContextType {
   planRevision: number;
   uploadBuildingPlan: (batiment: string, file: File) => Promise<void>;
   
+  // Business logic for changing zone
+  changeAffectationTertiaireZone: (affId: string, newZoneId: string, changeDate: Date, changeReason?: string) => { success: boolean; error?: string; warning?: string };
+  changeAffectationOperationnelleZone: (affId: string, newZoneId: string, changeDate: Date) => { success: boolean; error?: string; warning?: string };
+
   // Import/Export
   exportData: () => AppData;
   importData: (data: AppData) => void;
@@ -259,6 +263,126 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPlanRevision((r) => r + 1);
   }, []);
 
+  // === Business logic: change tertiaire zone ===
+  const changeAffectationTertiaireZone = useCallback(
+    (affId: string, newZoneId: string, changeDate: Date, changeReason?: string): { success: boolean; error?: string; warning?: string } => {
+      const aff = affectationsTertiaires.find((a) => a.id === affId);
+      if (!aff) return { success: false, error: "Affectation introuvable" };
+
+      const targetZone = zones.find((z) => z.id === newZoneId);
+      if (!targetZone) return { success: false, error: "Zone cible introuvable" };
+      if (targetZone.type !== "tertiaire") return { success: false, error: "Zone incompatible : une ressource tertiaire ne peut être affectée qu'à une zone tertiaire." };
+      if (aff.zone_id === newZoneId) return { success: false, error: "same_zone" };
+
+      const changeDateNorm = new Date(changeDate);
+      changeDateNorm.setHours(0, 0, 0, 0);
+      const debutDate = new Date(aff.date_debut);
+      debutDate.setHours(0, 0, 0, 0);
+
+      if (changeDateNorm < debutDate) return { success: false, error: "La date de changement ne peut pas être antérieure au début de l'affectation." };
+
+      if (!isActiveAtDate(aff.date_debut, aff.date_fin, changeDateNorm)) {
+        return { success: false, error: "Cette affectation n'est pas active à la date sélectionnée." };
+      }
+
+      const changeDateStr = `${changeDateNorm.getFullYear()}-${String(changeDateNorm.getMonth() + 1).padStart(2, "0")}-${String(changeDateNorm.getDate()).padStart(2, "0")}`;
+
+      if (debutDate.getTime() === changeDateNorm.getTime()) {
+        // Same start date: just update zone
+        setAffectationsTertiaires((prev) =>
+          prev.map((a) => (a.id === affId ? { ...a, zone_id: newZoneId } : a))
+        );
+      } else {
+        // Close current, create new
+        const veille = new Date(changeDateNorm);
+        veille.setDate(veille.getDate() - 1);
+        const veilleStr = `${veille.getFullYear()}-${String(veille.getMonth() + 1).padStart(2, "0")}-${String(veille.getDate()).padStart(2, "0")}`;
+
+        setAffectationsTertiaires((prev) => [
+          ...prev.map((a) => (a.id === affId ? { ...a, date_fin: veilleStr } : a)),
+          {
+            id: crypto.randomUUID(),
+            nom: aff.nom,
+            prenom: aff.prenom,
+            service: aff.service,
+            statut: aff.statut,
+            zone_id: newZoneId,
+            date_debut: changeDateStr,
+            date_fin: aff.date_fin,
+            change_reason: changeReason,
+          },
+        ]);
+      }
+
+      // Check capacity warning
+      let warning: string | undefined;
+      const stats = getOccupationForZone(newZoneId, changeDateNorm);
+      if (stats.occupation + 1 > targetZone.capacite_max) {
+        warning = `Capacité dépassée dans ${targetZone.nom_zone} : ${stats.occupation + 1} / ${targetZone.capacite_max} pers.`;
+      }
+
+      return { success: true, warning };
+    },
+    [affectationsTertiaires, zones, getOccupationForZone]
+  );
+
+  // === Business logic: change operationnelle zone ===
+  const changeAffectationOperationnelleZone = useCallback(
+    (affId: string, newZoneId: string, changeDate: Date): { success: boolean; error?: string; warning?: string } => {
+      const aff = affectationsOperationnelles.find((a) => a.id === affId);
+      if (!aff) return { success: false, error: "Affectation introuvable" };
+
+      const targetZone = zones.find((z) => z.id === newZoneId);
+      if (!targetZone) return { success: false, error: "Zone cible introuvable" };
+      if (aff.zone_id === newZoneId) return { success: false, error: "same_zone" };
+
+      const changeDateNorm = new Date(changeDate);
+      changeDateNorm.setHours(0, 0, 0, 0);
+      const debutDate = new Date(aff.date_debut);
+      debutDate.setHours(0, 0, 0, 0);
+
+      if (changeDateNorm < debutDate) return { success: false, error: "La date de changement ne peut pas être antérieure au début de l'affectation." };
+
+      if (!isActiveAtDate(aff.date_debut, aff.date_fin, changeDateNorm)) {
+        return { success: false, error: "Cette affectation n'est pas active à la date sélectionnée." };
+      }
+
+      const changeDateStr = `${changeDateNorm.getFullYear()}-${String(changeDateNorm.getMonth() + 1).padStart(2, "0")}-${String(changeDateNorm.getDate()).padStart(2, "0")}`;
+
+      if (debutDate.getTime() === changeDateNorm.getTime()) {
+        setAffectationsOperationnelles((prev) =>
+          prev.map((a) => (a.id === affId ? { ...a, zone_id: newZoneId } : a))
+        );
+      } else {
+        const veille = new Date(changeDateNorm);
+        veille.setDate(veille.getDate() - 1);
+        const veilleStr = `${veille.getFullYear()}-${String(veille.getMonth() + 1).padStart(2, "0")}-${String(veille.getDate()).padStart(2, "0")}`;
+
+        setAffectationsOperationnelles((prev) => [
+          ...prev.map((a) => (a.id === affId ? { ...a, date_fin: veilleStr } : a)),
+          {
+            id: crypto.randomUUID(),
+            nom_projet: aff.nom_projet,
+            surface_necessaire: aff.surface_necessaire,
+            zone_id: newZoneId,
+            date_debut: changeDateStr,
+            date_fin: aff.date_fin,
+          },
+        ]);
+      }
+
+      let warning: string | undefined;
+      const stats = getOccupationForZone(newZoneId, changeDateNorm);
+      const newOccupation = stats.occupation + aff.surface_necessaire;
+      if (newOccupation > targetZone.capacite_max) {
+        warning = `Capacité dépassée dans ${targetZone.nom_zone} : ${newOccupation} / ${targetZone.capacite_max} m²`;
+      }
+
+      return { success: true, warning };
+    },
+    [affectationsOperationnelles, zones, getOccupationForZone]
+  );
+
   const exportData = useCallback((): AppData => {
     return { zones, affectationsTertiaires, affectationsOperationnelles };
   }, [zones, affectationsTertiaires, affectationsOperationnelles]);
@@ -381,6 +505,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteAffectationOperationnelle,
         getOccupationForZone,
         getBatiments,
+        changeAffectationTertiaireZone,
+        changeAffectationOperationnelleZone,
         buildingPlanKeys,
         planRevision,
         uploadBuildingPlan,

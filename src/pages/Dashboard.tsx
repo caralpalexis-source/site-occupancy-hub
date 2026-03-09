@@ -45,10 +45,8 @@ const Dashboard: React.FC = () => {
     setDateEtat,
     getOccupationForZone,
     getBatiments,
-    updateAffectationOperationnelle,
-    addAffectationOperationnelle,
-    addAffectationTertiaire,
-    updateAffectationTertiaire,
+    changeAffectationTertiaireZone,
+    changeAffectationOperationnelleZone,
   } = useApp();
 
   const [filter, setFilter] = useState<ZoneFilterType>("all");
@@ -95,93 +93,47 @@ const Dashboard: React.FC = () => {
       if (!targetZone) return;
 
       const data = active.data.current;
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayStr = format(today, "yyyy-MM-dd");
 
-      // --- Handle existing tertiaire affectation drag ---
+      // --- Handle tertiaire ---
       if (data?.type === "tertiaire") {
         const aff = data.affectationTertiaire as AffectationTertiaire;
         if (!aff) return;
-        if (targetZone.type !== "tertiaire") {
-          toast({ title: "Zone incompatible", description: "Une ressource tertiaire ne peut être affectée qu'à une zone tertiaire.", variant: "destructive" });
+
+        const result = changeAffectationTertiaireZone(aff.id, targetZone.id, dateEtat);
+        if (!result.success) {
+          if (result.error === "same_zone") return;
+          toast({ title: "Déplacement impossible", description: result.error, variant: "destructive" });
           return;
         }
-        if (aff.zone_id === targetZone.id) return;
-        if (!isActiveAtDate(aff.date_debut, aff.date_fin, today)) {
-          toast({ title: "Aucune affectation active à modifier", description: "Cette affectation n'est pas active à la date du jour.", variant: "destructive" });
-          return;
+        if (result.warning) {
+          toast({ title: `⚠️ ${result.warning}` });
         }
-        const debutDate = new Date(aff.date_debut);
-        debutDate.setHours(0, 0, 0, 0);
-        if (debutDate.getTime() === today.getTime()) {
-          updateAffectationTertiaire({ ...aff, zone_id: targetZone.id });
-        } else {
-          const yesterday = new Date(today);
-          yesterday.setDate(yesterday.getDate() - 1);
-          const yesterdayStr = format(yesterday, "yyyy-MM-dd");
-          updateAffectationTertiaire({ ...aff, date_fin: yesterdayStr });
-          addAffectationTertiaire({
-            nom: aff.nom, prenom: aff.prenom, service: aff.service,
-            zone_id: targetZone.id, date_debut: todayStr, date_fin: aff.date_fin ?? undefined,
-          });
-        }
-        const targetStats = getOccupationForZone(targetZone.id, today);
-        if (targetStats.occupation + 1 > targetZone.capacite_max) {
-          toast({ title: `⚠️ Capacité dépassée dans ${targetZone.nom_zone}`, description: `${targetStats.occupation + 1} / ${targetZone.capacite_max} pers.` });
-        }
-        toast({ title: `Ressource déplacée vers ${targetZone.nom_zone}`, description: `${aff.prenom} ${aff.nom} à partir du ${format(today, "dd/MM/yyyy")}` });
+        toast({
+          title: `Ressource déplacée vers ${targetZone.nom_zone}`,
+          description: `${aff.prenom} ${aff.nom} à partir du ${format(dateEtat, "dd/MM/yyyy")}`,
+        });
         return;
       }
 
-      // --- Handle existing operationnelle affectation drag ---
+      // --- Handle operationnelle ---
       const affectation = data?.affectation as AffectationOperationnelle | undefined;
       if (!affectation) return;
-      if (affectation.zone_id === targetZone.id) return;
 
-      if (!isActiveAtDate(affectation.date_debut, affectation.date_fin, today)) {
-        toast({
-          title: "Aucune affectation active à modifier",
-          description: "Cette affectation n'est pas active à la date du jour.",
-          variant: "destructive",
-        });
+      const result = changeAffectationOperationnelleZone(affectation.id, targetZone.id, dateEtat);
+      if (!result.success) {
+        if (result.error === "same_zone") return;
+        toast({ title: "Déplacement impossible", description: result.error, variant: "destructive" });
         return;
       }
-
-      const debutDate = new Date(affectation.date_debut);
-      debutDate.setHours(0, 0, 0, 0);
-
-      if (debutDate.getTime() === today.getTime()) {
-        updateAffectationOperationnelle({ ...affectation, zone_id: targetZone.id });
-      } else {
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = format(yesterday, "yyyy-MM-dd");
-        updateAffectationOperationnelle({ ...affectation, date_fin: yesterdayStr });
-        addAffectationOperationnelle({
-          nom_projet: affectation.nom_projet,
-          surface_necessaire: affectation.surface_necessaire,
-          zone_id: targetZone.id,
-          date_debut: todayStr,
-          date_fin: affectation.date_fin ?? undefined,
-        });
+      if (result.warning) {
+        toast({ title: `⚠️ ${result.warning}` });
       }
-
-      const targetStats = getOccupationForZone(targetZone.id, today);
-      const newOccupation = targetStats.occupation + affectation.surface_necessaire;
-      if (newOccupation > targetZone.capacite_max) {
-        toast({
-          title: `⚠️ Capacité dépassée dans ${targetZone.nom_zone}`,
-          description: `${newOccupation} / ${targetZone.capacite_max} m²`,
-        });
-      }
-
       toast({
         title: `Ressource déplacée vers ${targetZone.nom_zone}`,
-        description: `${affectation.nom_projet} à partir du ${format(today, "dd/MM/yyyy")}`,
+        description: `${affectation.nom_projet} à partir du ${format(dateEtat, "dd/MM/yyyy")}`,
       });
     },
-    [updateAffectationOperationnelle, addAffectationOperationnelle, addAffectationTertiaire, updateAffectationTertiaire, getOccupationForZone]
+    [changeAffectationTertiaireZone, changeAffectationOperationnelleZone, dateEtat]
   );
 
   // --- Stats ---
