@@ -28,6 +28,7 @@ export const ScenarioBanner: React.FC = () => {
   const handleDiscard = () => {
     discardActiveScenario();
     setShowExitDialog(false);
+    toast.info("Modifications annulées — le scénario enregistré reste inchangé.");
   };
 
   const handlePromote = () => {
