@@ -20,6 +20,7 @@ interface DroppableZoneCardProps {
   affectationsTertiaires: AffectationTertiaire[];
   affectationsOperationnelles: AffectationOperationnelle[];
   isOverCapacity?: boolean;
+  isModifiedInScenario?: boolean;
 }
 
 const formatPeriod = (dateDebut: string, dateFin?: string): string => {
@@ -36,6 +37,7 @@ export const DroppableZoneCard: React.FC<DroppableZoneCardProps> = ({
   affectationsTertiaires,
   affectationsOperationnelles,
   isOverCapacity = false,
+  isModifiedInScenario = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const isOperationnelle = zone.type === "operationnelle";
@@ -56,7 +58,8 @@ export const DroppableZoneCard: React.FC<DroppableZoneCardProps> = ({
           className={cn(
             "zone-card group transition-all duration-200",
             isOver && "ring-2 ring-primary shadow-lg scale-[1.02] bg-primary/5",
-            isOverCapacity && "ring-2 ring-destructive/50"
+            isOverCapacity && "ring-2 ring-destructive/50",
+            isModifiedInScenario && !isOverCapacity && !isOver && "ring-2 ring-accent/50 bg-accent/5"
           )}
         >
           <CollapsibleTrigger className="w-full text-left">
@@ -87,6 +90,11 @@ export const DroppableZoneCard: React.FC<DroppableZoneCardProps> = ({
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-destructive/10 text-destructive">
                     <AlertTriangle className="w-3 h-3" />
                     Surchargée
+                  </span>
+                )}
+                {isModifiedInScenario && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-accent/10 text-accent-foreground">
+                    Modifiée
                   </span>
                 )}
                 <OccupationBadge taux={stats.taux} size="sm" />

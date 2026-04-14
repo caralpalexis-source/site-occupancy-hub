@@ -30,6 +30,7 @@ import { toast } from "@/hooks/use-toast";
 import { AffectationOperationnelle, AffectationTertiaire } from "@/types";
 import { useDoubleAffectations } from "@/hooks/useDoubleAffectations";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { modifiedZoneIds } from "@/lib/scenarioDiff";
 
 interface ActiveDragState {
   type: "operationnelle" | "tertiaire";
@@ -48,6 +49,8 @@ const Dashboard: React.FC = () => {
     getBatiments,
     changeAffectationTertiaireZone,
     changeAffectationOperationnelleZone,
+    activeScenario,
+    getDiffs,
   } = useApp();
 
   const [filter, setFilter] = useState<ZoneFilterType>("all");
@@ -55,6 +58,11 @@ const Dashboard: React.FC = () => {
   const [activeDrag, setActiveDrag] = useState<ActiveDragState | null>(null);
 
   const doubles = useDoubleAffectations(affectationsTertiaires, affectationsOperationnelles, dateEtat);
+
+  const scenarioModifiedZones = useMemo(() => {
+    if (!activeScenario) return new Set<string>();
+    return modifiedZoneIds(getDiffs());
+  }, [activeScenario, getDiffs]);
   const totalDoubles = doubles.totalTertiaires + doubles.totalOperationnelles;
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -346,6 +354,7 @@ const Dashboard: React.FC = () => {
                                 affectationsTertiaires={getActiveAffectationsTertiaires(zone.id)}
                                 affectationsOperationnelles={[]}
                                 isOverCapacity={overCapacityZoneIds.has(zone.id)}
+                                isModifiedInScenario={scenarioModifiedZones.has(zone.id)}
                               />
                             ))}
                           </div>
@@ -365,6 +374,7 @@ const Dashboard: React.FC = () => {
                                 affectationsTertiaires={[]}
                                 affectationsOperationnelles={getActiveAffectationsOperationnelles(zone.id)}
                                 isOverCapacity={overCapacityZoneIds.has(zone.id)}
+                                isModifiedInScenario={scenarioModifiedZones.has(zone.id)}
                               />
                             ))}
                           </div>

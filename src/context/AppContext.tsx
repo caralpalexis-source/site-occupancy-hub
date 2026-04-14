@@ -7,6 +7,7 @@ import {
   OccupationStats,
   Scenario,
 } from "@/types";
+import { computeDiff, Diff } from "@/lib/scenarioDiff";
 import { saveBuildingPlan, compressImage, getAllBuildingPlanKeys } from "@/lib/buildingPlanDB";
 
 const STORAGE_KEY = "site-management-data";
@@ -61,6 +62,12 @@ interface AppContextType {
   discardActiveScenario: () => void;
   promoteActiveScenario: () => void;
   promoteScenario: (id: string) => void;
+
+  // Diff / comparison
+  getDiffs: () => Diff[];
+  applyDiffToNominal: (diff: Diff) => void;
+  revertDiff: (diff: Diff) => void;
+  nominalData: AppData | null;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -492,6 +499,105 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setScenarios((prev) => prev.filter((s) => s.id !== id));
   }, [scenarios]);
 
+  // === Diff / comparison ===
+  const getDiffs = useCallback((): Diff[] => {
+    if (!nominalData) return [];
+    const current: AppData = { zones, affectationsTertiaires, affectationsOperationnelles };
+    return computeDiff(nominalData, current);
+  }, [nominalData, zones, affectationsTertiaires, affectationsOperationnelles]);
+
+  const applyDiffToNominal = useCallback((diff: Diff) => {
+    if (!nominalData) return;
+    const nd = structuredClone(nominalData);
+
+    switch (diff.type) {
+      case "zone_added": {
+        nd.zones.push(structuredClone(diff.data));
+        break;
+      }
+      case "zone_removed": {
+        nd.zones = nd.zones.filter((z) => z.id !== diff.zoneId);
+        break;
+      }
+      case "zone_updated": {
+        const z = nd.zones.find((z) => z.id === diff.zoneId);
+        if (z) (z as any)[diff.field] = structuredClone(diff.to);
+        break;
+      }
+      case "affectation_added": {
+        if (diff.entity === "tertiaire") {
+          nd.affectationsTertiaires.push(structuredClone(diff.data) as AffectationTertiaire);
+        } else {
+          nd.affectationsOperationnelles.push(structuredClone(diff.data) as AffectationOperationnelle);
+        }
+        break;
+      }
+      case "affectation_removed": {
+        if (diff.entity === "tertiaire") {
+          nd.affectationsTertiaires = nd.affectationsTertiaires.filter((a) => a.id !== diff.affectationId);
+        } else {
+          nd.affectationsOperationnelles = nd.affectationsOperationnelles.filter((a) => a.id !== diff.affectationId);
+        }
+        break;
+      }
+      case "affectation_updated": {
+        if (diff.entity === "tertiaire") {
+          const a = nd.affectationsTertiaires.find((a) => a.id === diff.affectationId);
+          if (a) (a as any)[diff.field] = structuredClone(diff.to);
+        } else {
+          const a = nd.affectationsOperationnelles.find((a) => a.id === diff.affectationId);
+          if (a) (a as any)[diff.field] = structuredClone(diff.to);
+        }
+        break;
+      }
+    }
+
+    setNominalData(nd);
+  }, [nominalData]);
+
+  const revertDiff = useCallback((diff: Diff) => {
+    if (!nominalData) return;
+
+    switch (diff.type) {
+      case "zone_added": {
+        setZones((prev) => prev.filter((z) => z.id !== diff.zoneId));
+        break;
+      }
+      case "zone_removed": {
+        setZones((prev) => [...prev, structuredClone(diff.data)]);
+        break;
+      }
+      case "zone_updated": {
+        setZones((prev) => prev.map((z) => z.id === diff.zoneId ? { ...z, [diff.field]: structuredClone(diff.from) } : z));
+        break;
+      }
+      case "affectation_added": {
+        if (diff.entity === "tertiaire") {
+          setAffectationsTertiaires((prev) => prev.filter((a) => a.id !== diff.affectationId));
+        } else {
+          setAffectationsOperationnelles((prev) => prev.filter((a) => a.id !== diff.affectationId));
+        }
+        break;
+      }
+      case "affectation_removed": {
+        if (diff.entity === "tertiaire") {
+          setAffectationsTertiaires((prev) => [...prev, structuredClone(diff.data) as AffectationTertiaire]);
+        } else {
+          setAffectationsOperationnelles((prev) => [...prev, structuredClone(diff.data) as AffectationOperationnelle]);
+        }
+        break;
+      }
+      case "affectation_updated": {
+        if (diff.entity === "tertiaire") {
+          setAffectationsTertiaires((prev) => prev.map((a) => a.id === diff.affectationId ? { ...a, [diff.field]: structuredClone(diff.from) } : a));
+        } else {
+          setAffectationsOperationnelles((prev) => prev.map((a) => a.id === diff.affectationId ? { ...a, [diff.field]: structuredClone(diff.from) } : a));
+        }
+        break;
+      }
+    }
+  }, [nominalData]);
+
   return (
     <AppContext.Provider
       value={{
@@ -527,6 +633,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         discardActiveScenario,
         promoteActiveScenario,
         promoteScenario,
+        getDiffs,
+        applyDiffToNominal,
+        revertDiff,
+        nominalData,
       }}
     >
       {children}
