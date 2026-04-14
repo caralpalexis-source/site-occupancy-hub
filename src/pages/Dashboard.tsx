@@ -58,6 +58,11 @@ const Dashboard: React.FC = () => {
   const [activeDrag, setActiveDrag] = useState<ActiveDragState | null>(null);
 
   const doubles = useDoubleAffectations(affectationsTertiaires, affectationsOperationnelles, dateEtat);
+
+  const scenarioModifiedZones = useMemo(() => {
+    if (!activeScenario) return new Set<string>();
+    return modifiedZoneIds(getDiffs());
+  }, [activeScenario, getDiffs]);
   const totalDoubles = doubles.totalTertiaires + doubles.totalOperationnelles;
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
