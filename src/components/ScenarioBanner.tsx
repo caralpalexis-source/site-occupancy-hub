@@ -10,13 +10,14 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogCancel,
-  AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import { FlaskConical, Save, X, ArrowUpCircle } from "lucide-react";
+import { FlaskConical, Save, X, ArrowUpCircle, GitCompareArrows } from "lucide-react";
+import { ScenarioDiffPanel } from "./ScenarioDiffPanel";
 
 export const ScenarioBanner: React.FC = () => {
   const { activeScenario, saveActiveScenario, discardActiveScenario, promoteActiveScenario } = useApp();
   const [showExitDialog, setShowExitDialog] = useState(false);
+  const [showDiffPanel, setShowDiffPanel] = useState(false);
 
   if (!activeScenario) return null;
 
@@ -48,14 +49,27 @@ export const ScenarioBanner: React.FC = () => {
             Les modifications ne s'appliquent qu'à ce scénario
           </span>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setShowExitDialog(true)}
-        >
-          Quitter le scénario
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowDiffPanel(true)}
+            className="gap-1"
+          >
+            <GitCompareArrows className="w-4 h-4" />
+            Comparer au nominal
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowExitDialog(true)}
+          >
+            Quitter le scénario
+          </Button>
+        </div>
       </div>
+
+      <ScenarioDiffPanel open={showDiffPanel} onOpenChange={setShowDiffPanel} />
 
       <AlertDialog open={showExitDialog} onOpenChange={setShowExitDialog}>
         <AlertDialogContent>

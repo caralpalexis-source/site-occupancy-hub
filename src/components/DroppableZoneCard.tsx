@@ -20,6 +20,7 @@ interface DroppableZoneCardProps {
   affectationsTertiaires: AffectationTertiaire[];
   affectationsOperationnelles: AffectationOperationnelle[];
   isOverCapacity?: boolean;
+  isModifiedInScenario?: boolean;
 }
 
 const formatPeriod = (dateDebut: string, dateFin?: string): string => {
