@@ -7,6 +7,7 @@ import { DragOverlayContent } from "@/components/DragOverlayContent";
 import { ZoneTypeFilter, ZoneFilterType } from "@/components/ZoneTypeFilter";
 import { BuildingSummary } from "@/components/BuildingSummary";
 import { BuildingPlanUpload } from "@/components/BuildingPlanUpload";
+import { BuildingServicePieChart } from "@/components/BuildingServicePieChart";
 import { Building2, Users, Maximize, TrendingUp, ChevronDown, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -320,6 +321,12 @@ const Dashboard: React.FC = () => {
                       <div className="flex-1">
                         <BuildingSummary batiment={batiment} zonesCount={batimentStats.zonesCount} occupationTertiaire={batimentStats.occupationTertiaire} occupationOperationnelle={batimentStats.occupationOperationnelle} tauxMoyen={batimentStats.tauxMoyen} />
                       </div>
+                      <BuildingServicePieChart
+                        batiment={batiment}
+                        affectations={affectationsTertiaires}
+                        zones={zones}
+                        dateEtat={dateEtat}
+                      />
                       <BuildingPlanUpload batiment={batiment} />
                     </div>
                   </CollapsibleTrigger>
