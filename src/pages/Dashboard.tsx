@@ -30,6 +30,7 @@ import { toast } from "@/hooks/use-toast";
 import { AffectationOperationnelle, AffectationTertiaire } from "@/types";
 import { useDoubleAffectations } from "@/hooks/useDoubleAffectations";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { modifiedZoneIds } from "@/lib/scenarioDiff";
 
 interface ActiveDragState {
   type: "operationnelle" | "tertiaire";
