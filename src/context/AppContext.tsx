@@ -62,6 +62,12 @@ interface AppContextType {
   discardActiveScenario: () => void;
   promoteActiveScenario: () => void;
   promoteScenario: (id: string) => void;
+
+  // Diff / comparison
+  getDiffs: () => Diff[];
+  applyDiffToNominal: (diff: Diff) => void;
+  revertDiff: (diff: Diff) => void;
+  nominalData: AppData | null;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
