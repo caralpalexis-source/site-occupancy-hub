@@ -48,6 +48,8 @@ const Dashboard: React.FC = () => {
     getBatiments,
     changeAffectationTertiaireZone,
     changeAffectationOperationnelleZone,
+    activeScenario,
+    getDiffs,
   } = useApp();
 
   const [filter, setFilter] = useState<ZoneFilterType>("all");
