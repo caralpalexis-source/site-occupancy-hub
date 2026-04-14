@@ -354,6 +354,7 @@ const Dashboard: React.FC = () => {
                                 affectationsTertiaires={getActiveAffectationsTertiaires(zone.id)}
                                 affectationsOperationnelles={[]}
                                 isOverCapacity={overCapacityZoneIds.has(zone.id)}
+                                isModifiedInScenario={scenarioModifiedZones.has(zone.id)}
                               />
                             ))}
                           </div>
