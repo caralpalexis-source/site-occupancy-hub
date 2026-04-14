@@ -321,6 +321,12 @@ const Dashboard: React.FC = () => {
                       <div className="flex-1">
                         <BuildingSummary batiment={batiment} zonesCount={batimentStats.zonesCount} occupationTertiaire={batimentStats.occupationTertiaire} occupationOperationnelle={batimentStats.occupationOperationnelle} tauxMoyen={batimentStats.tauxMoyen} />
                       </div>
+                      <BuildingServicePieChart
+                        batiment={batiment}
+                        affectations={affectationsTertiaires}
+                        zones={zones}
+                        dateEtat={dateEtat}
+                      />
                       <BuildingPlanUpload batiment={batiment} />
                     </div>
                   </CollapsibleTrigger>
