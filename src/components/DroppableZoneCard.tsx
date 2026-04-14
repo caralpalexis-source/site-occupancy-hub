@@ -58,7 +58,8 @@ export const DroppableZoneCard: React.FC<DroppableZoneCardProps> = ({
           className={cn(
             "zone-card group transition-all duration-200",
             isOver && "ring-2 ring-primary shadow-lg scale-[1.02] bg-primary/5",
-            isOverCapacity && "ring-2 ring-destructive/50"
+            isOverCapacity && "ring-2 ring-destructive/50",
+            isModifiedInScenario && !isOverCapacity && !isOver && "ring-2 ring-accent/50 bg-accent/5"
           )}
         >
           <CollapsibleTrigger className="w-full text-left">
