@@ -92,6 +92,11 @@ export const DroppableZoneCard: React.FC<DroppableZoneCardProps> = ({
                     Surchargée
                   </span>
                 )}
+                {isModifiedInScenario && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-accent/10 text-accent-foreground">
+                    Modifiée
+                  </span>
+                )}
                 <OccupationBadge taux={stats.taux} size="sm" />
                 <ChevronDown
                   className={cn(
