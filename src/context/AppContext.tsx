@@ -7,6 +7,7 @@ import {
   OccupationStats,
   Scenario,
 } from "@/types";
+import { computeDiff, Diff } from "@/lib/scenarioDiff";
 import { saveBuildingPlan, compressImage, getAllBuildingPlanKeys } from "@/lib/buildingPlanDB";
 
 const STORAGE_KEY = "site-management-data";
