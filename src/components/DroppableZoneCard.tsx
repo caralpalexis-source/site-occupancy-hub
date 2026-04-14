@@ -37,6 +37,7 @@ export const DroppableZoneCard: React.FC<DroppableZoneCardProps> = ({
   affectationsTertiaires,
   affectationsOperationnelles,
   isOverCapacity = false,
+  isModifiedInScenario = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const isOperationnelle = zone.type === "operationnelle";
