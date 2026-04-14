@@ -40,7 +40,7 @@ function DiffIcon({ type }: { type: Diff["type"] }) {
   switch (type) {
     case "zone_added":
     case "affectation_added":
-      return <Plus className="w-4 h-4 text-emerald-600" />;
+      return <Plus className="w-4 h-4 text-primary" />;
     case "zone_removed":
     case "affectation_removed":
       return <Minus className="w-4 h-4 text-destructive" />;
