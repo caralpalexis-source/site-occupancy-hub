@@ -20,7 +20,7 @@ const App = () => (
       <AppProvider>
         <Toaster />
         <Sonner />
-        <BrowserRouter>
+        <BrowserRouter basename="/site-occupancy-hub">
           <Layout>
             <Routes>
               <Route path="/" element={<Dashboard />} />
